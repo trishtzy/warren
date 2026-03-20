@@ -1,0 +1,10 @@
+# Build artifacts
+/server
+bin/
+
+# Nix / devenv
+.devenv/
+.pre-commit-config.yaml
+
+# Editor
+.claude/
