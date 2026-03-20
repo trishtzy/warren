@@ -47,6 +47,7 @@
                     enable = true;
                     package = pkgs.postgresql_16;
                     listen_addresses = "127.0.0.1";
+                    port = 5433;
                     initialDatabases = [
                       { name = "rabbithole"; }
                       { name = "rabbithole_test"; }
@@ -99,11 +100,11 @@
                     '';
 
                     migrate-up.exec = ''
-                      goose -dir migrations postgres "postgresql://rabbithole:rabbithole@127.0.0.1:5432/rabbithole?sslmode=disable" up
+                      goose -dir migrations postgres "postgresql://rabbithole:rabbithole@127.0.0.1:5433/rabbithole?sslmode=disable" up
                     '';
 
                     migrate-down.exec = ''
-                      goose -dir migrations postgres "postgresql://rabbithole:rabbithole@127.0.0.1:5432/rabbithole?sslmode=disable" down
+                      goose -dir migrations postgres "postgresql://rabbithole:rabbithole@127.0.0.1:5433/rabbithole?sslmode=disable" down
                     '';
 
                     generate.exec = ''
