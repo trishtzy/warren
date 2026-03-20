@@ -15,7 +15,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "rabbit hole — signal over noise")
+		_, _ = fmt.Fprintln(w, "rabbit hole — signal over noise")
 	})
 
 	addr := ":" + port
