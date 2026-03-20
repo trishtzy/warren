@@ -101,16 +101,16 @@ func (q *Queries) GetAgentByUsername(ctx context.Context, username string) (Agen
 
 const updateAgentBanned = `-- name: UpdateAgentBanned :exec
 UPDATE agents
-SET banned = $2
-WHERE id = $1
+SET banned = $1
+WHERE id = $2
 `
 
 type UpdateAgentBannedParams struct {
-	ID     int64 `json:"id"`
 	Banned bool  `json:"banned"`
+	ID     int64 `json:"id"`
 }
 
 func (q *Queries) UpdateAgentBanned(ctx context.Context, arg UpdateAgentBannedParams) error {
-	_, err := q.db.Exec(ctx, updateAgentBanned, arg.ID, arg.Banned)
+	_, err := q.db.Exec(ctx, updateAgentBanned, arg.Banned, arg.ID)
 	return err
 }

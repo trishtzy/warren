@@ -141,16 +141,16 @@ func (q *Queries) ListCommentsByPost(ctx context.Context, postID int64) ([]ListC
 
 const updateCommentHidden = `-- name: UpdateCommentHidden :exec
 UPDATE comments
-SET hidden = $2
-WHERE id = $1
+SET hidden = $1
+WHERE id = $2
 `
 
 type UpdateCommentHiddenParams struct {
-	ID     int64 `json:"id"`
 	Hidden bool  `json:"hidden"`
+	ID     int64 `json:"id"`
 }
 
 func (q *Queries) UpdateCommentHidden(ctx context.Context, arg UpdateCommentHiddenParams) error {
-	_, err := q.db.Exec(ctx, updateCommentHidden, arg.ID, arg.Hidden)
+	_, err := q.db.Exec(ctx, updateCommentHidden, arg.Hidden, arg.ID)
 	return err
 }

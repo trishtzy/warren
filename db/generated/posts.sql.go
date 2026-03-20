@@ -105,12 +105,12 @@ FROM posts p
 JOIN agents a ON a.id = p.agent_id
 WHERE p.hidden = FALSE
 ORDER BY p.created_at DESC
-LIMIT $1 OFFSET $2
+LIMIT $2 OFFSET $1
 `
 
 type ListPostsByNewParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	RowOffset int32 `json:"row_offset"`
+	RowLimit  int32 `json:"row_limit"`
 }
 
 type ListPostsByNewRow struct {
@@ -127,7 +127,7 @@ type ListPostsByNewRow struct {
 }
 
 func (q *Queries) ListPostsByNew(ctx context.Context, arg ListPostsByNewParams) ([]ListPostsByNewRow, error) {
-	rows, err := q.db.Query(ctx, listPostsByNew, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, listPostsByNew, arg.RowOffset, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -164,12 +164,12 @@ FROM posts p
 JOIN agents a ON a.id = p.agent_id
 WHERE p.hidden = FALSE
 ORDER BY p.score DESC, p.created_at DESC
-LIMIT $1 OFFSET $2
+LIMIT $2 OFFSET $1
 `
 
 type ListPostsByScoreParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	RowOffset int32 `json:"row_offset"`
+	RowLimit  int32 `json:"row_limit"`
 }
 
 type ListPostsByScoreRow struct {
@@ -186,7 +186,7 @@ type ListPostsByScoreRow struct {
 }
 
 func (q *Queries) ListPostsByScore(ctx context.Context, arg ListPostsByScoreParams) ([]ListPostsByScoreRow, error) {
-	rows, err := q.db.Query(ctx, listPostsByScore, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, listPostsByScore, arg.RowOffset, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -218,32 +218,32 @@ func (q *Queries) ListPostsByScore(ctx context.Context, arg ListPostsByScorePara
 
 const updatePostHidden = `-- name: UpdatePostHidden :exec
 UPDATE posts
-SET hidden = $2
-WHERE id = $1
+SET hidden = $1
+WHERE id = $2
 `
 
 type UpdatePostHiddenParams struct {
-	ID     int64 `json:"id"`
 	Hidden bool  `json:"hidden"`
+	ID     int64 `json:"id"`
 }
 
 func (q *Queries) UpdatePostHidden(ctx context.Context, arg UpdatePostHiddenParams) error {
-	_, err := q.db.Exec(ctx, updatePostHidden, arg.ID, arg.Hidden)
+	_, err := q.db.Exec(ctx, updatePostHidden, arg.Hidden, arg.ID)
 	return err
 }
 
 const updatePostScore = `-- name: UpdatePostScore :exec
 UPDATE posts
-SET score = $2
-WHERE id = $1
+SET score = $1
+WHERE id = $2
 `
 
 type UpdatePostScoreParams struct {
-	ID    int64 `json:"id"`
 	Score int32 `json:"score"`
+	ID    int64 `json:"id"`
 }
 
 func (q *Queries) UpdatePostScore(ctx context.Context, arg UpdatePostScoreParams) error {
-	_, err := q.db.Exec(ctx, updatePostScore, arg.ID, arg.Score)
+	_, err := q.db.Exec(ctx, updatePostScore, arg.Score, arg.ID)
 	return err
 }
