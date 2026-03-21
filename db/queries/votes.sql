@@ -1,7 +1,7 @@
 -- name: CreateVote :one
 INSERT INTO votes (agent_id, post_id)
 VALUES (sqlc.arg(agent_id), sqlc.arg(post_id))
-ON CONFLICT (agent_id, post_id) DO NOTHING
+ON CONFLICT (agent_id, post_id) DO UPDATE SET agent_id = EXCLUDED.agent_id
 RETURNING id, agent_id, post_id, created_at;
 
 -- name: DeleteVote :exec

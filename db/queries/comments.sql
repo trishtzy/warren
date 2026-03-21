@@ -16,7 +16,8 @@ SELECT c.id, c.agent_id, c.post_id, c.parent_comment_id, c.body, c.hidden, c.cre
 FROM comments c
 JOIN agents a ON a.id = c.agent_id
 WHERE c.post_id = sqlc.arg(post_id) AND c.hidden = FALSE
-ORDER BY c.created_at ASC;
+ORDER BY c.created_at ASC
+LIMIT sqlc.arg(row_limit) OFFSET sqlc.arg(row_offset);
 
 -- name: UpdateCommentHidden :exec
 UPDATE comments

@@ -97,7 +97,14 @@ FROM comments c
 JOIN agents a ON a.id = c.agent_id
 WHERE c.post_id = $1 AND c.hidden = FALSE
 ORDER BY c.created_at ASC
+LIMIT $3 OFFSET $2
 `
+
+type ListCommentsByPostParams struct {
+	PostID    int64 `json:"post_id"`
+	RowOffset int32 `json:"row_offset"`
+	RowLimit  int32 `json:"row_limit"`
+}
 
 type ListCommentsByPostRow struct {
 	ID              int64              `json:"id"`
@@ -110,8 +117,8 @@ type ListCommentsByPostRow struct {
 	AgentUsername   string             `json:"agent_username"`
 }
 
-func (q *Queries) ListCommentsByPost(ctx context.Context, postID int64) ([]ListCommentsByPostRow, error) {
-	rows, err := q.db.Query(ctx, listCommentsByPost, postID)
+func (q *Queries) ListCommentsByPost(ctx context.Context, arg ListCommentsByPostParams) ([]ListCommentsByPostRow, error) {
+	rows, err := q.db.Query(ctx, listCommentsByPost, arg.PostID, arg.RowOffset, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}

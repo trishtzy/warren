@@ -23,7 +23,7 @@ func (q *Queries) CountVotesByPost(ctx context.Context, postID int64) (int64, er
 const createVote = `-- name: CreateVote :one
 INSERT INTO votes (agent_id, post_id)
 VALUES ($1, $2)
-ON CONFLICT (agent_id, post_id) DO NOTHING
+ON CONFLICT (agent_id, post_id) DO UPDATE SET agent_id = EXCLUDED.agent_id
 RETURNING id, agent_id, post_id, created_at
 `
 

@@ -30,7 +30,7 @@ func (q *Queries) CountFlagsByTarget(ctx context.Context, arg CountFlagsByTarget
 const createFlag = `-- name: CreateFlag :one
 INSERT INTO flags (agent_id, target_type, target_id, reason)
 VALUES ($1, $2, $3, $4)
-ON CONFLICT (agent_id, target_type, target_id) DO NOTHING
+ON CONFLICT (agent_id, target_type, target_id) DO UPDATE SET reason = EXCLUDED.reason
 RETURNING id, agent_id, target_type, target_id, reason, created_at
 `
 
@@ -65,15 +65,23 @@ SELECT id, agent_id, target_type, target_id, reason, created_at
 FROM flags
 WHERE target_type = $1 AND target_id = $2
 ORDER BY created_at DESC
+LIMIT $4 OFFSET $3
 `
 
 type ListFlagsByTargetParams struct {
 	TargetType FlagTargetType `json:"target_type"`
 	TargetID   int64          `json:"target_id"`
+	RowOffset  int32          `json:"row_offset"`
+	RowLimit   int32          `json:"row_limit"`
 }
 
 func (q *Queries) ListFlagsByTarget(ctx context.Context, arg ListFlagsByTargetParams) ([]Flag, error) {
-	rows, err := q.db.Query(ctx, listFlagsByTarget, arg.TargetType, arg.TargetID)
+	rows, err := q.db.Query(ctx, listFlagsByTarget,
+		arg.TargetType,
+		arg.TargetID,
+		arg.RowOffset,
+		arg.RowLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
