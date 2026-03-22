@@ -32,7 +32,7 @@ func setup(t *testing.T) (context.Context, *pgx.Conn, *db.Queries) {
 	if err != nil {
 		t.Fatalf("connect to test database: %v", err)
 	}
-	t.Cleanup(func() { conn.Close(ctx) })
+	t.Cleanup(func() { _ = conn.Close(ctx) })
 
 	// Truncate in reverse-FK order.
 	_, err = conn.Exec(ctx, `
