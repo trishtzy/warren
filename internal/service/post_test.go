@@ -107,6 +107,19 @@ func (m *mockPostStore) UpdatePostScore(_ context.Context, arg db.UpdatePostScor
 	return nil
 }
 
+func (m *mockPostStore) DeleteVote(_ context.Context, arg db.DeleteVoteParams) error {
+	delete(m.votes, voteKeyT{arg.AgentID, arg.PostID})
+	return nil
+}
+
+func (m *mockPostStore) GetVote(_ context.Context, arg db.GetVoteParams) (db.Vote, error) {
+	v, ok := m.votes[voteKeyT{arg.AgentID, arg.PostID}]
+	if !ok {
+		return db.Vote{}, pgx.ErrNoRows
+	}
+	return v, nil
+}
+
 func (m *mockPostStore) CountVotesByPost(_ context.Context, postID int64) (int64, error) {
 	var count int64
 	for _, v := range m.votes {
@@ -115,6 +128,16 @@ func (m *mockPostStore) CountVotesByPost(_ context.Context, postID int64) (int64
 		}
 	}
 	return count, nil
+}
+
+func (m *mockPostStore) ListVotedPostIDsByAgent(_ context.Context, agentID int64) ([]int64, error) {
+	var ids []int64
+	for k := range m.votes {
+		if k.agentID == agentID {
+			ids = append(ids, k.postID)
+		}
+	}
+	return ids, nil
 }
 
 // ExecTx runs fn directly against the mock store (no real transaction needed in tests).
@@ -406,6 +429,106 @@ func TestIsPrivateIP(t *testing.T) {
 		if got != tt.private {
 			t.Errorf("isPrivateIP(%q) = %v, want %v", tt.ip, got, tt.private)
 		}
+	}
+}
+
+func TestUpvote(t *testing.T) {
+	store := newMockPostStore()
+	svc := newTestService(store)
+
+	// Create a post first (auto-upvotes with agent 1).
+	result, err := svc.Submit(context.Background(), 1, "Title", "", "", false)
+	if err != nil {
+		t.Fatalf("submit failed: %v", err)
+	}
+	postID := result.Post.ID
+
+	// Agent 2 upvotes.
+	voted, err := svc.Upvote(context.Background(), 2, postID)
+	if err != nil {
+		t.Fatalf("upvote failed: %v", err)
+	}
+	if !voted {
+		t.Error("expected voted=true for new vote")
+	}
+
+	// Verify score updated.
+	count, _ := store.CountVotesByPost(context.Background(), postID)
+	if count != 2 {
+		t.Errorf("got %d votes, want 2", count)
+	}
+
+	// Agent 2 upvotes again — should be idempotent.
+	voted, err = svc.Upvote(context.Background(), 2, postID)
+	if err != nil {
+		t.Fatalf("second upvote failed: %v", err)
+	}
+	if voted {
+		t.Error("expected voted=false for duplicate vote")
+	}
+}
+
+func TestUnvote(t *testing.T) {
+	store := newMockPostStore()
+	svc := newTestService(store)
+
+	// Create a post (auto-upvotes with agent 1).
+	result, err := svc.Submit(context.Background(), 1, "Title", "", "", false)
+	if err != nil {
+		t.Fatalf("submit failed: %v", err)
+	}
+	postID := result.Post.ID
+
+	// Agent 2 upvotes then unvotes.
+	_, _ = svc.Upvote(context.Background(), 2, postID)
+	removed, err := svc.Unvote(context.Background(), 2, postID)
+	if err != nil {
+		t.Fatalf("unvote failed: %v", err)
+	}
+	if !removed {
+		t.Error("expected removed=true")
+	}
+
+	// Verify score updated.
+	count, _ := store.CountVotesByPost(context.Background(), postID)
+	if count != 1 {
+		t.Errorf("got %d votes, want 1", count)
+	}
+
+	// Unvote again — should be idempotent.
+	removed, err = svc.Unvote(context.Background(), 2, postID)
+	if err != nil {
+		t.Fatalf("second unvote failed: %v", err)
+	}
+	if removed {
+		t.Error("expected removed=false for non-existent vote")
+	}
+}
+
+func TestVotedPostIDs(t *testing.T) {
+	store := newMockPostStore()
+	svc := newTestService(store)
+
+	// Create two posts.
+	r1, _ := svc.Submit(context.Background(), 1, "Post 1", "", "", false)
+	r2, _ := svc.Submit(context.Background(), 1, "Post 2", "", "", false)
+
+	// Agent 1 auto-voted on both. Check VotedPostIDs.
+	voted, err := svc.VotedPostIDs(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("VotedPostIDs failed: %v", err)
+	}
+	if !voted[r1.Post.ID] || !voted[r2.Post.ID] {
+		t.Errorf("expected both posts voted, got %v", voted)
+	}
+
+	// Agent 2 has no votes.
+	voted, err = svc.VotedPostIDs(context.Background(), 2)
+	if err != nil {
+		t.Fatalf("VotedPostIDs failed: %v", err)
+	}
+	if len(voted) != 0 {
+		t.Errorf("expected empty voted set, got %v", voted)
 	}
 }
 

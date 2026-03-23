@@ -34,8 +34,11 @@ type PostQuerier interface {
 	ListPostsByNew(ctx context.Context, arg db.ListPostsByNewParams) ([]db.ListPostsByNewRow, error)
 	CountPosts(ctx context.Context) (int64, error)
 	CreateVote(ctx context.Context, arg db.CreateVoteParams) (db.Vote, error)
+	DeleteVote(ctx context.Context, arg db.DeleteVoteParams) error
+	GetVote(ctx context.Context, arg db.GetVoteParams) (db.Vote, error)
 	UpdatePostScore(ctx context.Context, arg db.UpdatePostScoreParams) error
 	CountVotesByPost(ctx context.Context, postID int64) (int64, error)
+	ListVotedPostIDsByAgent(ctx context.Context, agentID int64) ([]int64, error)
 }
 
 // PostStore extends PostQuerier with transaction support.
@@ -210,6 +213,89 @@ func (s *PostService) Submit(ctx context.Context, agentID int64, title, rawURL, 
 
 	post.Score = int32(count)
 	return &SubmitResult{Post: post}, nil
+}
+
+// Upvote creates a vote for the given agent on the given post and updates the score.
+// It is idempotent — voting on an already-voted post is a no-op and returns false.
+func (s *PostService) Upvote(ctx context.Context, agentID, postID int64) (voted bool, err error) {
+	err = s.store.ExecTx(ctx, func(q PostQuerier) error {
+		// Check if already voted.
+		_, txErr := q.GetVote(ctx, db.GetVoteParams{AgentID: agentID, PostID: postID})
+		if txErr == nil {
+			// Already voted — no-op.
+			voted = false
+			return nil
+		}
+		if !errors.Is(txErr, pgx.ErrNoRows) {
+			return fmt.Errorf("checking vote: %w", txErr)
+		}
+
+		_, txErr = q.CreateVote(ctx, db.CreateVoteParams{AgentID: agentID, PostID: postID})
+		if txErr != nil {
+			return fmt.Errorf("creating vote: %w", txErr)
+		}
+
+		count, txErr := q.CountVotesByPost(ctx, postID)
+		if txErr != nil {
+			return fmt.Errorf("counting votes: %w", txErr)
+		}
+		txErr = q.UpdatePostScore(ctx, db.UpdatePostScoreParams{Score: int32(count), ID: postID})
+		if txErr != nil {
+			return fmt.Errorf("updating score: %w", txErr)
+		}
+
+		voted = true
+		return nil
+	})
+	return voted, err
+}
+
+// Unvote removes a vote for the given agent on the given post and updates the score.
+// It is idempotent — unvoting when not voted is a no-op and returns false.
+func (s *PostService) Unvote(ctx context.Context, agentID, postID int64) (removed bool, err error) {
+	err = s.store.ExecTx(ctx, func(q PostQuerier) error {
+		// Check if vote exists.
+		_, txErr := q.GetVote(ctx, db.GetVoteParams{AgentID: agentID, PostID: postID})
+		if errors.Is(txErr, pgx.ErrNoRows) {
+			// Not voted — no-op.
+			removed = false
+			return nil
+		}
+		if txErr != nil {
+			return fmt.Errorf("checking vote: %w", txErr)
+		}
+
+		txErr = q.DeleteVote(ctx, db.DeleteVoteParams{AgentID: agentID, PostID: postID})
+		if txErr != nil {
+			return fmt.Errorf("deleting vote: %w", txErr)
+		}
+
+		count, txErr := q.CountVotesByPost(ctx, postID)
+		if txErr != nil {
+			return fmt.Errorf("counting votes: %w", txErr)
+		}
+		txErr = q.UpdatePostScore(ctx, db.UpdatePostScoreParams{Score: int32(count), ID: postID})
+		if txErr != nil {
+			return fmt.Errorf("updating score: %w", txErr)
+		}
+
+		removed = true
+		return nil
+	})
+	return removed, err
+}
+
+// VotedPostIDs returns the set of post IDs the agent has voted on.
+func (s *PostService) VotedPostIDs(ctx context.Context, agentID int64) (map[int64]bool, error) {
+	ids, err := s.store.ListVotedPostIDsByAgent(ctx, agentID)
+	if err != nil {
+		return nil, fmt.Errorf("listing voted post ids: %w", err)
+	}
+	m := make(map[int64]bool, len(ids))
+	for _, id := range ids {
+		m[id] = true
+	}
+	return m, nil
 }
 
 // FetchPageTitle fetches a URL and extracts the <title> tag content.

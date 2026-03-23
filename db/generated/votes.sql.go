@@ -81,3 +81,27 @@ func (q *Queries) GetVote(ctx context.Context, arg GetVoteParams) (Vote, error) 
 	)
 	return i, err
 }
+
+const listVotedPostIDsByAgent = `-- name: ListVotedPostIDsByAgent :many
+SELECT post_id FROM votes WHERE agent_id = $1
+`
+
+func (q *Queries) ListVotedPostIDsByAgent(ctx context.Context, agentID int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listVotedPostIDsByAgent, agentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var post_id int64
+		if err := rows.Scan(&post_id); err != nil {
+			return nil, err
+		}
+		items = append(items, post_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
