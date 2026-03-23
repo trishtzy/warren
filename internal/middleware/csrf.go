@@ -14,8 +14,11 @@ const (
 	csrfTokenBytes = 32
 )
 
+// csrfContextKey is an unexported type for the CSRF context key.
+type csrfContextKey struct{}
+
 // csrfTokenKey is the context key for the masked CSRF token string.
-var csrfTokenKey = struct{}{}
+var csrfTokenKey = csrfContextKey{}
 
 // CSRFToken returns the masked CSRF token for the current request.
 // Templates should render this value in a hidden form field.

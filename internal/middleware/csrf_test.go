@@ -9,9 +9,9 @@ import (
 )
 
 // dummyHandler is a simple handler that writes 200 OK.
-var dummyHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+var dummyHandler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("ok"))
+	_, _ = w.Write([]byte("ok"))
 })
 
 func TestCSRF_SetsCookieOnGET(t *testing.T) {
