@@ -5,11 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"unicode/utf8"
+
+	"github.com/jackc/pgx/v5"
 	db "github.com/trishtzy/warren/db/generated"
 )
 
@@ -19,6 +23,7 @@ var (
 	ErrInvalidURL    = errors.New("url must start with http:// or https://")
 	ErrURLAndBody    = errors.New("a post can have a url or a body, but not both")
 	ErrBodyTooLong   = errors.New("body must be at most 10000 characters")
+	ErrPrivateURL    = errors.New("url must not point to a private or internal address")
 )
 
 // PostQuerier defines the database methods required by PostService.
@@ -33,18 +38,76 @@ type PostQuerier interface {
 	CountVotesByPost(ctx context.Context, postID int64) (int64, error)
 }
 
+// PostStore extends PostQuerier with transaction support.
+type PostStore interface {
+	PostQuerier
+	// ExecTx runs fn within a database transaction, passing a transactional PostQuerier.
+	// The transaction is committed if fn returns nil, rolled back otherwise.
+	ExecTx(ctx context.Context, fn func(PostQuerier) error) error
+}
+
+// PgPostStore wraps a pgxpool.Pool and db.Queries to implement PostStore.
+type PgPostStore struct {
+	*db.Queries
+	pool interface {
+		Begin(ctx context.Context) (pgx.Tx, error)
+	}
+}
+
+// NewPgPostStore creates a PgPostStore from a pool.
+func NewPgPostStore(queries *db.Queries, pool interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+}) *PgPostStore {
+	return &PgPostStore{Queries: queries, pool: pool}
+}
+
+// ExecTx begins a transaction, calls fn with a transactional Queries, and commits or rolls back.
+func (s *PgPostStore) ExecTx(ctx context.Context, fn func(PostQuerier) error) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	qtx := s.Queries.WithTx(tx)
+	if err := fn(qtx); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 // PostService handles post submission and retrieval.
 type PostService struct {
-	queries PostQuerier
-	client  *http.Client
+	store  PostStore
+	client *http.Client
 }
 
 // NewPostService creates a new PostService.
-func NewPostService(queries PostQuerier) *PostService {
+func NewPostService(store PostStore) *PostService {
+	dialer := &net.Dialer{Timeout: 5 * time.Second}
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(addr)
+			if err != nil {
+				return nil, ErrPrivateURL
+			}
+			ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+			if err != nil {
+				return nil, fmt.Errorf("resolving host: %w", err)
+			}
+			for _, ip := range ips {
+				if isPrivateIP(ip.IP) {
+					return nil, ErrPrivateURL
+				}
+			}
+			return dialer.DialContext(ctx, network, net.JoinHostPort(host, port))
+		},
+	}
 	return &PostService{
-		queries: queries,
+		store: store,
 		client: &http.Client{
-			Timeout: 5 * time.Second,
+			Timeout:   5 * time.Second,
+			Transport: transport,
 		},
 	}
 }
@@ -65,7 +128,7 @@ func (s *PostService) Submit(ctx context.Context, agentID int64, title, rawURL, 
 	if title == "" {
 		return nil, ErrTitleRequired
 	}
-	if len(title) > 300 {
+	if utf8.RuneCountInString(title) > 300 {
 		return nil, ErrTitleTooLong
 	}
 	if rawURL != "" && body != "" {
@@ -89,7 +152,7 @@ func (s *PostService) Submit(ctx context.Context, agentID int64, title, rawURL, 
 
 		// Check for duplicate URLs unless forced.
 		if !force {
-			dupes, err := s.queries.GetPostsByURL(ctx, urlPtr)
+			dupes, err := s.store.GetPostsByURL(ctx, urlPtr)
 			if err != nil {
 				return nil, fmt.Errorf("checking duplicate url: %w", err)
 			}
@@ -103,39 +166,49 @@ func (s *PostService) Submit(ctx context.Context, agentID int64, title, rawURL, 
 		bodyPtr = &body
 	}
 
-	post, err := s.queries.CreatePost(ctx, db.CreatePostParams{
-		AgentID: agentID,
-		Title:   title,
-		Url:     urlPtr,
-		Body:    bodyPtr,
-		Domain:  domainPtr,
+	// Use a transaction to atomically create the post, vote, and update score.
+	var post db.Post
+	var count int64
+	err := s.store.ExecTx(ctx, func(q PostQuerier) error {
+		var txErr error
+		post, txErr = q.CreatePost(ctx, db.CreatePostParams{
+			AgentID: agentID,
+			Title:   title,
+			Url:     urlPtr,
+			Body:    bodyPtr,
+			Domain:  domainPtr,
+		})
+		if txErr != nil {
+			return fmt.Errorf("creating post: %w", txErr)
+		}
+
+		// Auto-upvote: create vote and update score.
+		_, txErr = q.CreateVote(ctx, db.CreateVoteParams{
+			AgentID: agentID,
+			PostID:  post.ID,
+		})
+		if txErr != nil {
+			return fmt.Errorf("auto-upvoting: %w", txErr)
+		}
+
+		count, txErr = q.CountVotesByPost(ctx, post.ID)
+		if txErr != nil {
+			return fmt.Errorf("counting votes: %w", txErr)
+		}
+		txErr = q.UpdatePostScore(ctx, db.UpdatePostScoreParams{
+			Score: int32(count),
+			ID:    post.ID,
+		})
+		if txErr != nil {
+			return fmt.Errorf("updating score: %w", txErr)
+		}
+		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("creating post: %w", err)
+		return nil, err
 	}
 
-	// Auto-upvote: create vote and update score.
-	_, err = s.queries.CreateVote(ctx, db.CreateVoteParams{
-		AgentID: agentID,
-		PostID:  post.ID,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("auto-upvoting: %w", err)
-	}
-
-	count, err := s.queries.CountVotesByPost(ctx, post.ID)
-	if err != nil {
-		return nil, fmt.Errorf("counting votes: %w", err)
-	}
-	err = s.queries.UpdatePostScore(ctx, db.UpdatePostScoreParams{
-		Score: int32(count),
-		ID:    post.ID,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("updating score: %w", err)
-	}
 	post.Score = int32(count)
-
 	return &SubmitResult{Post: post}, nil
 }
 
@@ -203,6 +276,12 @@ func ExtractDomain(rawURL string) string {
 	host := u.Hostname()
 	host = strings.TrimPrefix(host, "www.")
 	return host
+}
+
+// isPrivateIP returns true if the IP is loopback, private, link-local, or unspecified.
+func isPrivateIP(ip net.IP) bool {
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
+		ip.IsLinkLocalMulticast() || ip.IsUnspecified()
 }
 
 // validateURL checks that the URL starts with http:// or https://.

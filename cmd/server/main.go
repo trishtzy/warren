@@ -44,7 +44,8 @@ func main() {
 
 	queries := db.New(pool)
 	authService := service.NewAuthService(queries)
-	postService := service.NewPostService(queries)
+	postStore := service.NewPgPostStore(queries, pool)
+	postService := service.NewPostService(postStore)
 
 	tmpl, err := template.ParseGlob("templates/*.html")
 	if err != nil {
