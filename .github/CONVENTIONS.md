@@ -29,7 +29,15 @@ Chore: add PR template and conventions
 
 ## PR titles
 
-Follow the same format as commit messages. Keep under 70 characters. The PR title becomes the squash-merge commit message, so make it count.
+Follow the same format as commit messages but **without the issue number**. Keep under 70 characters. The PR title becomes the squash-merge commit message; GitHub appends the PR number automatically on squash-merge.
+
+Examples:
+```
+Add post submission and listing
+Fix duplicate URL detection on submit
+Update CI to use PostgreSQL 18
+Chore: add PR template and conventions
+```
 
 ## Branch names
 
