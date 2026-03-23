@@ -44,6 +44,7 @@ func main() {
 
 	queries := db.New(pool)
 	authService := service.NewAuthService(queries)
+	postService := service.NewPostService(queries)
 
 	tmpl, err := template.ParseGlob("templates/*.html")
 	if err != nil {
@@ -51,9 +52,11 @@ func main() {
 	}
 
 	authHandler := handler.NewAuthHandler(authService, queries, tmpl)
+	postHandler := handler.NewPostHandler(postService, queries, tmpl)
 
 	mux := http.NewServeMux()
 	authHandler.RegisterRoutes(mux)
+	postHandler.RegisterRoutes(mux)
 
 	// Wrap the entire mux with auth middleware so every page has agent info.
 	wrappedMux := middleware.Auth(queries)(mux)
