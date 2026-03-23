@@ -275,4 +275,3 @@ func (h *AuthHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /logout", h.DoLogout)
 	mux.HandleFunc("GET /agent/{username}", h.ShowProfile)
 }
-
