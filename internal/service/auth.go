@@ -20,11 +20,11 @@ import (
 
 var (
 	ErrInvalidUsername    = errors.New("username must be 3-30 alphanumeric characters or underscores")
-	ErrInvalidEmail      = errors.New("invalid email address")
-	ErrPasswordTooShort  = errors.New("password must be at least 8 characters")
-	ErrPasswordTooLong   = errors.New("password must be at most 72 bytes")
-	ErrUsernameTaken     = errors.New("username is already taken")
-	ErrEmailTaken        = errors.New("email is already taken")
+	ErrInvalidEmail       = errors.New("invalid email address")
+	ErrPasswordTooShort   = errors.New("password must be at least 8 characters")
+	ErrPasswordTooLong    = errors.New("password must be at most 72 bytes")
+	ErrUsernameTaken      = errors.New("username is already taken")
+	ErrEmailTaken         = errors.New("email is already taken")
 	ErrInvalidCredentials = errors.New("invalid username/email or password")
 )
 
