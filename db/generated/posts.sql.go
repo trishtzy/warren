@@ -98,6 +98,51 @@ func (q *Queries) GetPostByID(ctx context.Context, id int64) (GetPostByIDRow, er
 	return i, err
 }
 
+const getPostsByURL = `-- name: GetPostsByURL :many
+SELECT id, agent_id, title, url, domain, score, created_at
+FROM posts
+WHERE url = $1 AND hidden = FALSE
+ORDER BY created_at DESC
+`
+
+type GetPostsByURLRow struct {
+	ID        int64              `json:"id"`
+	AgentID   int64              `json:"agent_id"`
+	Title     string             `json:"title"`
+	Url       *string            `json:"url"`
+	Domain    *string            `json:"domain"`
+	Score     int32              `json:"score"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) GetPostsByURL(ctx context.Context, url *string) ([]GetPostsByURLRow, error) {
+	rows, err := q.db.Query(ctx, getPostsByURL, url)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetPostsByURLRow{}
+	for rows.Next() {
+		var i GetPostsByURLRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AgentID,
+			&i.Title,
+			&i.Url,
+			&i.Domain,
+			&i.Score,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPostsByNew = `-- name: ListPostsByNew :many
 SELECT p.id, p.agent_id, p.title, p.url, p.body, p.domain, p.score, p.hidden, p.created_at,
        a.username AS agent_username

@@ -40,3 +40,9 @@ WHERE id = sqlc.arg(id);
 
 -- name: CountPosts :one
 SELECT count(*) FROM posts WHERE hidden = FALSE;
+
+-- name: GetPostsByURL :many
+SELECT id, agent_id, title, url, domain, score, created_at
+FROM posts
+WHERE url = sqlc.arg(url) AND hidden = FALSE
+ORDER BY created_at DESC;
