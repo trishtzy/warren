@@ -1,0 +1,10 @@
+{{template "layout" .}}
+{{define "content"}}
+<h1>Login</h1>
+{{if .Error}}<p style="color:red">{{.Error}}</p>{{end}}
+<form method="POST" action="/login">
+  <label>Username or Email<br><input name="identifier" value="{{.Identifier}}" required></label><br><br>
+  <label>Password<br><input name="password" type="password" required></label><br><br>
+  <button type="submit">Login</button>
+</form>
+{{end}}
