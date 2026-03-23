@@ -64,7 +64,7 @@ SELECT p.id, p.agent_id, p.title, p.url, p.body, p.domain, p.score, p.hidden, p.
        a.username AS agent_username
 FROM posts p
 JOIN agents a ON a.id = p.agent_id
-WHERE p.id = $1
+WHERE p.id = $1 AND p.hidden = FALSE
 `
 
 type GetPostByIDRow struct {
