@@ -226,6 +226,9 @@ func (s *PostService) Upvote(ctx context.Context, agentID, postID int64) (voted 
 			voted = false
 			return nil
 		}
+		if !errors.Is(txErr, pgx.ErrNoRows) {
+			return fmt.Errorf("checking vote: %w", txErr)
+		}
 
 		_, txErr = q.CreateVote(ctx, db.CreateVoteParams{AgentID: agentID, PostID: postID})
 		if txErr != nil {
@@ -253,10 +256,13 @@ func (s *PostService) Unvote(ctx context.Context, agentID, postID int64) (remove
 	err = s.store.ExecTx(ctx, func(q PostQuerier) error {
 		// Check if vote exists.
 		_, txErr := q.GetVote(ctx, db.GetVoteParams{AgentID: agentID, PostID: postID})
-		if txErr != nil {
+		if errors.Is(txErr, pgx.ErrNoRows) {
 			// Not voted — no-op.
 			removed = false
 			return nil
+		}
+		if txErr != nil {
+			return fmt.Errorf("checking vote: %w", txErr)
 		}
 
 		txErr = q.DeleteVote(ctx, db.DeleteVoteParams{AgentID: agentID, PostID: postID})

@@ -6,7 +6,9 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	db "github.com/trishtzy/warren/db/generated"
@@ -242,11 +244,11 @@ func (h *PostHandler) ShowPost(w http.ResponseWriter, r *http.Request) {
 
 	// Check if the current agent has voted on this post.
 	if agent := middleware.AgentFromContext(r.Context()); agent != nil {
-		votedSet, voteErr := h.svc.VotedPostIDs(r.Context(), agent.AgentID)
-		if voteErr != nil {
-			log.Printf("voted post ids error: %v", voteErr)
-		} else {
-			pv.Voted = votedSet[post.ID]
+		_, voteErr := h.queries.GetVote(r.Context(), db.GetVoteParams{AgentID: agent.AgentID, PostID: post.ID})
+		if voteErr == nil {
+			pv.Voted = true
+		} else if !errors.Is(voteErr, pgx.ErrNoRows) {
+			log.Printf("vote check error: %v", voteErr)
 		}
 	}
 
@@ -262,6 +264,7 @@ func (h *PostHandler) ShowPost(w http.ResponseWriter, r *http.Request) {
 
 // DoVote handles upvote toggle. If the agent has already voted, it unvotes; otherwise it upvotes.
 // Uses a form POST for simplicity — no JavaScript required.
+// TODO: Add CSRF protection — tracked as a follow-up issue (H4).
 func (h *PostHandler) DoVote(w http.ResponseWriter, r *http.Request) {
 	agent := middleware.AgentFromContext(r.Context())
 	if agent == nil {
@@ -276,15 +279,23 @@ func (h *PostHandler) DoVote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if vote exists to decide toggle direction.
-	votedSet, err := h.svc.VotedPostIDs(r.Context(), agent.AgentID)
+	// Verify the post exists before attempting to vote.
+	_, err = h.queries.GetPostByID(r.Context(), postID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		http.NotFound(w, r)
+		return
+	}
 	if err != nil {
-		log.Printf("vote check error: %v", err)
+		log.Printf("get post error: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	if votedSet[postID] {
+	// Check if vote exists to decide toggle direction.
+	_, err = h.queries.GetVote(r.Context(), db.GetVoteParams{AgentID: agent.AgentID, PostID: postID})
+	hasVoted := err == nil
+
+	if hasVoted {
 		if _, err := h.svc.Unvote(r.Context(), agent.AgentID, postID); err != nil {
 			log.Printf("unvote error: %v", err)
 			http.Error(w, "internal server error", http.StatusInternalServerError)
@@ -298,12 +309,16 @@ func (h *PostHandler) DoVote(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Redirect back to the referring page, or home.
-	referer := r.Header.Get("Referer")
-	if referer == "" {
-		referer = "/"
+	// Redirect back to a safe local path, falling back to the post page.
+	redirect := fmt.Sprintf("/post/%d", postID)
+	if ref := r.Header.Get("Referer"); ref != "" {
+		if u, parseErr := url.Parse(ref); parseErr == nil && u.Host == "" && strings.HasPrefix(u.Path, "/") {
+			redirect = u.Path
+		} else if parseErr == nil && u.Host == r.Host {
+			redirect = u.Path
+		}
 	}
-	http.Redirect(w, r, referer, http.StatusSeeOther)
+	http.Redirect(w, r, redirect, http.StatusSeeOther)
 }
 
 // RegisterRoutes registers all post-related routes on the given mux.
