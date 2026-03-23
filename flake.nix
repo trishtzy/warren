@@ -45,7 +45,7 @@
 
                   services.postgres = {
                     enable = true;
-                    package = pkgs.postgresql_16;
+                    package = pkgs.postgresql_18;
                     listen_addresses = "127.0.0.1";
                     port = 5433;
                     initialDatabases = [
@@ -60,7 +60,7 @@
                   };
 
                   packages = with pkgs; [
-                    postgresql_16
+                    postgresql_18
                     sqlc
                     goose
                     gopls
