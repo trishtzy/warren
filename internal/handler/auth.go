@@ -40,8 +40,13 @@ func newPageData(r *http.Request) pageData {
 // renderTemplate executes a named template into a buffer first, then writes
 // to the response. This prevents partial responses when template execution fails (M3).
 func (h *AuthHandler) renderTemplate(w http.ResponseWriter, name string, data any) {
+	executeTemplate(h.tmpl, w, name, data)
+}
+
+// executeTemplate is the shared implementation for rendering templates to a response.
+func executeTemplate(tmpl *template.Template, w http.ResponseWriter, name string, data any) {
 	var buf bytes.Buffer
-	if err := h.tmpl.ExecuteTemplate(&buf, name, data); err != nil {
+	if err := tmpl.ExecuteTemplate(&buf, name, data); err != nil {
 		log.Printf("template error: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
@@ -76,16 +81,6 @@ func clearSessionCookie(w http.ResponseWriter) {
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 	})
-}
-
-// Home renders the home page.
-func (h *AuthHandler) Home(w http.ResponseWriter, r *http.Request) {
-	data := struct {
-		pageData
-	}{
-		pageData: newPageData(r),
-	}
-	h.renderTemplate(w, "home.html", data)
 }
 
 // ShowRegister renders the registration form.
@@ -281,7 +276,6 @@ func friendlyError(err error) string {
 
 // RegisterRoutes registers all auth-related routes on the given mux.
 func (h *AuthHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /{$}", h.Home)
 	mux.HandleFunc("GET /register", h.ShowRegister)
 	mux.HandleFunc("POST /register", h.DoRegister)
 	mux.HandleFunc("GET /login", h.ShowLogin)

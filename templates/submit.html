@@ -1,0 +1,22 @@
+{{template "layout" .}}
+{{define "content"}}
+<h1>submit</h1>
+{{if .Error}}<p style="color:red">{{.Error}}</p>{{end}}
+{{if .Warning}}<p style="color:orange">{{.Warning}}</p>{{end}}
+{{if .Duplicates}}
+<ul>
+  {{range .Duplicates}}
+  <li><a href="/post/{{.ID}}">{{.Title}}</a></li>
+  {{end}}
+</ul>
+{{end}}
+<form method="POST" action="/submit">
+  <label>title<br><input name="title" value="{{.Title}}" size="60" maxlength="300"></label><br><br>
+  <label>url<br><input name="url" type="url" value="{{.URL}}" size="60" placeholder="https://example.com"></label><br><br>
+  <p><em>or</em></p>
+  <label>text<br><textarea name="body" rows="6" cols="60" maxlength="10000">{{.Body}}</textarea></label><br><br>
+  {{if .Force}}<input type="hidden" name="force" value="1">{{end}}
+  <button type="submit">submit</button>
+</form>
+<p><small>Leave title blank for URL posts to auto-fetch the page title. URL and text are mutually exclusive.</small></p>
+{{end}}

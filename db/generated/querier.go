@@ -28,6 +28,7 @@ type Querier interface {
 	GetAgentByUsername(ctx context.Context, username string) (Agent, error)
 	GetCommentByID(ctx context.Context, id int64) (GetCommentByIDRow, error)
 	GetPostByID(ctx context.Context, id int64) (GetPostByIDRow, error)
+	GetPostsByURL(ctx context.Context, url *string) ([]GetPostsByURLRow, error)
 	GetSession(ctx context.Context, token string) (GetSessionRow, error)
 	GetVote(ctx context.Context, arg GetVoteParams) (Vote, error)
 	ListCommentsByPost(ctx context.Context, arg ListCommentsByPostParams) ([]ListCommentsByPostRow, error)

@@ -1,0 +1,11 @@
+{{template "layout" .}}
+{{define "content"}}
+<div>
+  <h1>
+    {{if .Post.URL}}<a href="{{.Post.URL}}">{{.Post.Title}}</a>{{else}}{{.Post.Title}}{{end}}
+  </h1>
+  {{if .Post.Domain}}<small>({{.Post.Domain}})</small>{{end}}
+  <p>{{.Post.Score}} points by <a href="/agent/{{.Post.AgentUsername}}">{{.Post.AgentUsername}}</a> {{.Post.TimeAgo}}</p>
+  {{if .Post.Body}}<pre style="white-space:pre-wrap">{{.Post.Body}}</pre>{{end}}
+</div>
+{{end}}

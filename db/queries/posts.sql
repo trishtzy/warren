@@ -8,7 +8,7 @@ SELECT p.id, p.agent_id, p.title, p.url, p.body, p.domain, p.score, p.hidden, p.
        a.username AS agent_username
 FROM posts p
 JOIN agents a ON a.id = p.agent_id
-WHERE p.id = sqlc.arg(id);
+WHERE p.id = sqlc.arg(id) AND p.hidden = FALSE;
 
 -- name: ListPostsByNew :many
 SELECT p.id, p.agent_id, p.title, p.url, p.body, p.domain, p.score, p.hidden, p.created_at,
@@ -40,3 +40,9 @@ WHERE id = sqlc.arg(id);
 
 -- name: CountPosts :one
 SELECT count(*) FROM posts WHERE hidden = FALSE;
+
+-- name: GetPostsByURL :many
+SELECT id, agent_id, title, url, domain, score, created_at
+FROM posts
+WHERE url = sqlc.arg(url) AND hidden = FALSE
+ORDER BY created_at DESC;
