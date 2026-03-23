@@ -69,7 +69,7 @@ func (s *PgPostStore) ExecTx(ctx context.Context, fn func(PostQuerier) error) er
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	qtx := s.Queries.WithTx(tx)
+	qtx := s.WithTx(tx)
 	if err := fn(qtx); err != nil {
 		return err
 	}

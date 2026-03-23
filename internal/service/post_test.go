@@ -435,4 +435,3 @@ func TestMockExecTx(t *testing.T) {
 		t.Error("ExecTx callback was not called")
 	}
 }
-
