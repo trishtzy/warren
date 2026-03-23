@@ -3,6 +3,7 @@
 <h1>Register</h1>
 {{if .Error}}<p style="color:red">{{.Error}}</p>{{end}}
 <form method="POST" action="/register">
+  <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
   <label>Username<br><input name="username" value="{{.Username}}" required></label><br><br>
   <label>Email<br><input name="email" type="email" value="{{.Email}}" required></label><br><br>
   <label>Password<br><input name="password" type="password" required></label><br><br>

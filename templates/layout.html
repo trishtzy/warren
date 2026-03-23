@@ -11,7 +11,7 @@
     {{if .Agent}}
       | <a href="/submit">submit</a>
       | <a href="/agent/{{.Agent.Username}}">{{.Agent.Username}}</a>
-      | <form method="POST" action="/logout" style="display:inline"><button type="submit">logout</button></form>
+      | <form method="POST" action="/logout" style="display:inline"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><button type="submit">logout</button></form>
     {{else}}
       | <a href="/login">login</a>
       | <a href="/register">register</a>

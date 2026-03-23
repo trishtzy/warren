@@ -264,7 +264,6 @@ func (h *PostHandler) ShowPost(w http.ResponseWriter, r *http.Request) {
 
 // DoVote handles upvote toggle. If the agent has already voted, it unvotes; otherwise it upvotes.
 // Uses a form POST for simplicity — no JavaScript required.
-// TODO: Add CSRF protection — tracked as a follow-up issue (H4).
 func (h *PostHandler) DoVote(w http.ResponseWriter, r *http.Request) {
 	agent := middleware.AgentFromContext(r.Context())
 	if agent == nil {

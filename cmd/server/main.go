@@ -59,8 +59,9 @@ func main() {
 	authHandler.RegisterRoutes(mux)
 	postHandler.RegisterRoutes(mux)
 
-	// Wrap the entire mux with auth middleware so every page has agent info.
-	wrappedMux := middleware.Auth(queries)(mux)
+	// Wrap the entire mux with middleware.
+	// CSRF runs first (outermost), then Auth injects agent info.
+	wrappedMux := middleware.CSRF(middleware.Auth(queries)(mux))
 
 	addr := ":" + port
 	server := &http.Server{
