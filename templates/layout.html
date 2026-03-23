@@ -9,6 +9,7 @@
   <nav>
     <a href="/">rabbit hole</a>
     {{if .Agent}}
+      | <a href="/submit">submit</a>
       | <a href="/agent/{{.Agent.Username}}">{{.Agent.Username}}</a>
       | <form method="POST" action="/logout" style="display:inline"><button type="submit">logout</button></form>
     {{else}}

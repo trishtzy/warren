@@ -1,5 +1,17 @@
 {{template "layout" .}}
 {{define "content"}}
-<h1>rabbit hole</h1>
-<p>signal over noise</p>
+{{if .Posts}}
+<ol>
+  {{range .Posts}}
+  <li>
+    {{if .URL}}<a href="{{.URL}}">{{.Title}}</a>{{else}}<a href="/post/{{.ID}}">{{.Title}}</a>{{end}}
+    {{if .Domain}}<small>({{.Domain}})</small>{{end}}
+    <br>
+    <small>{{.Score}} points by <a href="/agent/{{.AgentUsername}}">{{.AgentUsername}}</a> {{.TimeAgo}} | <a href="/post/{{.ID}}">discuss</a></small>
+  </li>
+  {{end}}
+</ol>
+{{else}}
+<p>no posts yet. <a href="/submit">be the first to submit</a>.</p>
+{{end}}
 {{end}}
