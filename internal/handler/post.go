@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"html/template"
@@ -30,16 +29,7 @@ func NewPostHandler(svc *service.PostService, queries *db.Queries, tmpl *templat
 }
 
 func (h *PostHandler) renderTemplate(w http.ResponseWriter, name string, data any) {
-	var buf bytes.Buffer
-	if err := h.tmpl.ExecuteTemplate(&buf, name, data); err != nil {
-		log.Printf("template error: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if _, err := buf.WriteTo(w); err != nil {
-		log.Printf("write error: %v", err)
-	}
+	executeTemplate(h.tmpl, w, name, data)
 }
 
 // ListPosts renders the home page with a list of recent posts.
@@ -130,13 +120,6 @@ func (h *PostHandler) DoSubmit(w http.ResponseWriter, r *http.Request) {
 	body := r.FormValue("body")
 	force := r.FormValue("force") == "1"
 
-	// If URL provided and title is empty, try to auto-fetch the page title.
-	if rawURL != "" && title == "" {
-		if fetched, err := h.svc.FetchPageTitle(rawURL); err == nil && fetched != "" {
-			title = fetched
-		}
-	}
-
 	renderForm := func(errorMsg, warningMsg string, dupes []db.GetPostsByURLRow) {
 		showForce := len(dupes) > 0
 
@@ -170,6 +153,14 @@ func (h *PostHandler) DoSubmit(w http.ResponseWriter, r *http.Request) {
 		}
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		h.renderTemplate(w, "submit.html", data)
+	}
+
+	// Auto-fetch page title after form is ready to re-render on error.
+	// Only attempt if URL is provided and title is empty.
+	if rawURL != "" && title == "" {
+		if fetched, fetchErr := h.svc.FetchPageTitle(rawURL); fetchErr == nil && fetched != "" {
+			title = fetched
+		}
 	}
 
 	result, err := h.svc.Submit(r.Context(), agent.AgentID, title, rawURL, body, force)

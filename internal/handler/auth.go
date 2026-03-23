@@ -40,8 +40,13 @@ func newPageData(r *http.Request) pageData {
 // renderTemplate executes a named template into a buffer first, then writes
 // to the response. This prevents partial responses when template execution fails (M3).
 func (h *AuthHandler) renderTemplate(w http.ResponseWriter, name string, data any) {
+	executeTemplate(h.tmpl, w, name, data)
+}
+
+// executeTemplate is the shared implementation for rendering templates to a response.
+func executeTemplate(tmpl *template.Template, w http.ResponseWriter, name string, data any) {
 	var buf bytes.Buffer
-	if err := h.tmpl.ExecuteTemplate(&buf, name, data); err != nil {
+	if err := tmpl.ExecuteTemplate(&buf, name, data); err != nil {
 		log.Printf("template error: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
