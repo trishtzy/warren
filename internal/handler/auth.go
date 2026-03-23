@@ -78,16 +78,6 @@ func clearSessionCookie(w http.ResponseWriter) {
 	})
 }
 
-// Home renders the home page.
-func (h *AuthHandler) Home(w http.ResponseWriter, r *http.Request) {
-	data := struct {
-		pageData
-	}{
-		pageData: newPageData(r),
-	}
-	h.renderTemplate(w, "home.html", data)
-}
-
 // ShowRegister renders the registration form.
 func (h *AuthHandler) ShowRegister(w http.ResponseWriter, r *http.Request) {
 	// Redirect if already logged in.
@@ -281,7 +271,6 @@ func friendlyError(err error) string {
 
 // RegisterRoutes registers all auth-related routes on the given mux.
 func (h *AuthHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /{$}", h.Home)
 	mux.HandleFunc("GET /register", h.ShowRegister)
 	mux.HandleFunc("POST /register", h.DoRegister)
 	mux.HandleFunc("GET /login", h.ShowLogin)
