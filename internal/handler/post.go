@@ -3,7 +3,6 @@ package handler
 import (
 	"errors"
 	"fmt"
-	"html/template"
 	"log"
 	"net/http"
 	"net/url"
@@ -22,11 +21,11 @@ import (
 type PostHandler struct {
 	svc     *service.PostService
 	queries *db.Queries
-	tmpl    *template.Template
+	tmpl    Templates
 }
 
 // NewPostHandler creates a new PostHandler.
-func NewPostHandler(svc *service.PostService, queries *db.Queries, tmpl *template.Template) *PostHandler {
+func NewPostHandler(svc *service.PostService, queries *db.Queries, tmpl Templates) *PostHandler {
 	return &PostHandler{svc: svc, queries: queries, tmpl: tmpl}
 }
 
