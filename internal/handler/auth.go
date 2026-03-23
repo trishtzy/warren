@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"errors"
 	"html/template"
 	"log"
@@ -36,12 +37,18 @@ func newPageData(r *http.Request) pageData {
 	return pageData{Agent: middleware.AgentFromContext(r.Context())}
 }
 
-// renderTemplate executes a named template with the given data.
+// renderTemplate executes a named template into a buffer first, then writes
+// to the response. This prevents partial responses when template execution fails (M3).
 func (h *AuthHandler) renderTemplate(w http.ResponseWriter, name string, data any) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := h.tmpl.ExecuteTemplate(w, name, data); err != nil {
+	var buf bytes.Buffer
+	if err := h.tmpl.ExecuteTemplate(&buf, name, data); err != nil {
 		log.Printf("template error: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if _, err := buf.WriteTo(w); err != nil {
+		log.Printf("write error: %v", err)
 	}
 }
 
@@ -52,6 +59,7 @@ func setSessionCookie(w http.ResponseWriter, token string) {
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   true, // M1: always set Secure flag
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   sessionCookieMaxAge,
 	})
@@ -64,6 +72,7 @@ func clearSessionCookie(w http.ResponseWriter) {
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 	})
@@ -98,6 +107,7 @@ func (h *AuthHandler) ShowRegister(w http.ResponseWriter, r *http.Request) {
 }
 
 // DoRegister processes the registration form submission.
+// TODO: Add CSRF protection — tracked as a follow-up issue (H4).
 func (h *AuthHandler) DoRegister(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -166,6 +176,7 @@ func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // DoLogin processes the login form submission.
+// TODO: Add CSRF protection — tracked as a follow-up issue (H4).
 func (h *AuthHandler) DoLogin(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -196,6 +207,7 @@ func (h *AuthHandler) DoLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // DoLogout processes a logout request.
+// TODO: Add CSRF protection — tracked as a follow-up issue (H4).
 func (h *AuthHandler) DoLogout(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("session")
 	if err == nil {
@@ -253,6 +265,8 @@ func friendlyError(err error) string {
 		return "Please enter a valid email address."
 	case errors.Is(err, service.ErrPasswordTooShort):
 		return "Password must be at least 8 characters."
+	case errors.Is(err, service.ErrPasswordTooLong):
+		return "Password must be at most 72 characters."
 	case errors.Is(err, service.ErrUsernameTaken):
 		return "That username is already taken."
 	case errors.Is(err, service.ErrEmailTaken):

@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 
 	db "github.com/trishtzy/warren/db/generated"
@@ -28,6 +30,12 @@ func AgentFromContext(ctx context.Context) *AgentInfo {
 	return info
 }
 
+// hashToken returns the hex-encoded SHA-256 hash of a session token.
+func hashToken(token string) string {
+	h := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(h[:])
+}
+
 // Auth returns middleware that reads the "session" cookie, validates it against
 // the database, and stores the agent info in the request context. If the cookie
 // is missing or the session is invalid, the request proceeds without
@@ -42,7 +50,8 @@ func Auth(queries *db.Queries) func(http.Handler) http.Handler {
 				return
 			}
 
-			session, err := queries.GetSession(r.Context(), cookie.Value)
+			// H3: Hash the cookie value before querying the database.
+			session, err := queries.GetSession(r.Context(), hashToken(cookie.Value))
 			if err != nil {
 				// Invalid or expired session — continue unauthenticated.
 				next.ServeHTTP(w, r)
@@ -55,6 +64,14 @@ func Auth(queries *db.Queries) func(http.Handler) http.Handler {
 				IsAdmin:  session.IsAdmin,
 				Banned:   session.Banned,
 			}
+
+			// H2: If the agent is banned, do not inject them into context.
+			// They proceed as an unauthenticated user.
+			if info.Banned {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			ctx := context.WithValue(r.Context(), agentKey, info)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
