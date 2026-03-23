@@ -11,6 +11,7 @@
 </ul>
 {{end}}
 <form method="POST" action="/submit">
+  <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
   <label>title<br><input name="title" value="{{.Title}}" size="60" maxlength="300"></label><br><br>
   <label>url<br><input name="url" type="url" value="{{.URL}}" size="60" placeholder="https://example.com"></label><br><br>
   <p><em>or</em></p>

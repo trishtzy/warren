@@ -30,11 +30,15 @@ func NewAuthHandler(svc *service.AuthService, queries *db.Queries, tmpl *templat
 
 // pageData is the base data passed to every template.
 type pageData struct {
-	Agent *middleware.AgentInfo
+	Agent     *middleware.AgentInfo
+	CSRFToken string
 }
 
 func newPageData(r *http.Request) pageData {
-	return pageData{Agent: middleware.AgentFromContext(r.Context())}
+	return pageData{
+		Agent:     middleware.AgentFromContext(r.Context()),
+		CSRFToken: middleware.CSRFToken(r),
+	}
 }
 
 // renderTemplate executes a named template into a buffer first, then writes
@@ -102,7 +106,6 @@ func (h *AuthHandler) ShowRegister(w http.ResponseWriter, r *http.Request) {
 }
 
 // DoRegister processes the registration form submission.
-// TODO: Add CSRF protection — tracked as a follow-up issue (H4).
 func (h *AuthHandler) DoRegister(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -171,7 +174,6 @@ func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // DoLogin processes the login form submission.
-// TODO: Add CSRF protection — tracked as a follow-up issue (H4).
 func (h *AuthHandler) DoLogin(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -202,7 +204,6 @@ func (h *AuthHandler) DoLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // DoLogout processes a logout request.
-// TODO: Add CSRF protection — tracked as a follow-up issue (H4).
 func (h *AuthHandler) DoLogout(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("session")
 	if err == nil {
