@@ -44,6 +44,17 @@ func (h *PostHandler) ListPosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Build voted-post-ID set for the current agent.
+	var votedSet map[int64]bool
+	if agent := middleware.AgentFromContext(r.Context()); agent != nil {
+		votedSet, err = h.svc.VotedPostIDs(r.Context(), agent.AgentID)
+		if err != nil {
+			log.Printf("voted post ids error: %v", err)
+			// Non-fatal: continue without vote indicators.
+			votedSet = nil
+		}
+	}
+
 	type postItem struct {
 		ID            int64
 		Title         string
@@ -52,6 +63,7 @@ func (h *PostHandler) ListPosts(w http.ResponseWriter, r *http.Request) {
 		Score         int32
 		AgentUsername string
 		TimeAgo       string
+		Voted         bool
 	}
 
 	items := make([]postItem, 0, len(posts))
@@ -62,6 +74,7 @@ func (h *PostHandler) ListPosts(w http.ResponseWriter, r *http.Request) {
 			Score:         p.Score,
 			AgentUsername: p.AgentUsername,
 			TimeAgo:       timeAgo(p.CreatedAt.Time),
+			Voted:         votedSet[p.ID],
 		}
 		if p.Url != nil {
 			item.URL = *p.Url
@@ -207,6 +220,7 @@ func (h *PostHandler) ShowPost(w http.ResponseWriter, r *http.Request) {
 		Score         int32
 		AgentUsername string
 		TimeAgo       string
+		Voted         bool
 	}
 
 	pv := postView{
@@ -226,6 +240,16 @@ func (h *PostHandler) ShowPost(w http.ResponseWriter, r *http.Request) {
 		pv.Body = *post.Body
 	}
 
+	// Check if the current agent has voted on this post.
+	if agent := middleware.AgentFromContext(r.Context()); agent != nil {
+		votedSet, voteErr := h.svc.VotedPostIDs(r.Context(), agent.AgentID)
+		if voteErr != nil {
+			log.Printf("voted post ids error: %v", voteErr)
+		} else {
+			pv.Voted = votedSet[post.ID]
+		}
+	}
+
 	data := struct {
 		pageData
 		Post postView
@@ -236,12 +260,59 @@ func (h *PostHandler) ShowPost(w http.ResponseWriter, r *http.Request) {
 	h.renderTemplate(w, "post.html", data)
 }
 
+// DoVote handles upvote toggle. If the agent has already voted, it unvotes; otherwise it upvotes.
+// Uses a form POST for simplicity — no JavaScript required.
+func (h *PostHandler) DoVote(w http.ResponseWriter, r *http.Request) {
+	agent := middleware.AgentFromContext(r.Context())
+	if agent == nil {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	idStr := r.PathValue("id")
+	postID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Check if vote exists to decide toggle direction.
+	votedSet, err := h.svc.VotedPostIDs(r.Context(), agent.AgentID)
+	if err != nil {
+		log.Printf("vote check error: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	if votedSet[postID] {
+		if _, err := h.svc.Unvote(r.Context(), agent.AgentID, postID); err != nil {
+			log.Printf("unvote error: %v", err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		if _, err := h.svc.Upvote(r.Context(), agent.AgentID, postID); err != nil {
+			log.Printf("upvote error: %v", err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Redirect back to the referring page, or home.
+	referer := r.Header.Get("Referer")
+	if referer == "" {
+		referer = "/"
+	}
+	http.Redirect(w, r, referer, http.StatusSeeOther)
+}
+
 // RegisterRoutes registers all post-related routes on the given mux.
 func (h *PostHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /{$}", h.ListPosts)
 	mux.HandleFunc("GET /submit", h.ShowSubmit)
 	mux.HandleFunc("POST /submit", h.DoSubmit)
 	mux.HandleFunc("GET /post/{id}", h.ShowPost)
+	mux.HandleFunc("POST /post/{id}/vote", h.DoVote)
 }
 
 // postFriendlyError converts known post service errors into user-facing messages.

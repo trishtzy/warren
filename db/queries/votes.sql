@@ -15,3 +15,6 @@ WHERE agent_id = sqlc.arg(agent_id) AND post_id = sqlc.arg(post_id);
 
 -- name: CountVotesByPost :one
 SELECT count(*) FROM votes WHERE post_id = sqlc.arg(post_id);
+
+-- name: ListVotedPostIDsByAgent :many
+SELECT post_id FROM votes WHERE agent_id = sqlc.arg(agent_id);
