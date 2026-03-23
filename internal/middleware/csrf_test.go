@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -36,14 +37,33 @@ func TestCSRF_SetsCookieOnGET(t *testing.T) {
 			if !c.HttpOnly {
 				t.Error("cookie should be HttpOnly")
 			}
-			if !c.Secure {
-				t.Error("cookie should be Secure")
+			if c.Secure {
+				t.Error("cookie should not be Secure on plain HTTP")
 			}
 		}
 	}
 	if !found {
 		t.Fatal("CSRF cookie not set on GET request")
 	}
+}
+
+func TestCSRF_SecureFlagOnTLS(t *testing.T) {
+	handler := CSRF(dummyHandler)
+	req := httptest.NewRequest(http.MethodGet, "https://example.com/", nil)
+	req.TLS = &tls.ConnectionState{}
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == csrfCookieName {
+			if !c.Secure {
+				t.Error("cookie should be Secure on TLS")
+			}
+			return
+		}
+	}
+	t.Fatal("CSRF cookie not set")
 }
 
 func TestCSRF_InjectsTokenInContext(t *testing.T) {

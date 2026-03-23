@@ -110,7 +110,7 @@ func CSRF(next http.Handler) http.Handler {
 				Value:    token,
 				Path:     "/",
 				HttpOnly: true,
-				Secure:   true,
+				Secure:   r.TLS != nil,
 				SameSite: http.SameSiteLaxMode,
 			})
 		}
