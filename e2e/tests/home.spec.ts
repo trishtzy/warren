@@ -13,11 +13,13 @@ test.describe("Home page", () => {
     await expect(page.locator('a[href="/login"]')).toBeVisible();
   });
 
-  test("shows empty state when no posts", async ({ page }) => {
+  test("shows posts or empty state", async ({ page }) => {
     await page.goto("/");
-    // Either shows posts or the empty state message
-    const body = await page.textContent("body");
-    expect(body).toBeTruthy();
+    // The home page should either show the empty state message or a list of posts.
+    // Since tests share a database, we check for either condition.
+    const hasEmptyState = await page.locator("text=no posts yet").isVisible();
+    const hasPostList = await page.locator("text=points by").first().isVisible();
+    expect(hasEmptyState || hasPostList).toBe(true);
   });
 });
 

@@ -40,12 +40,11 @@ test.describe("Comments", () => {
 
     // Find and click the comment permalink (time ago link)
     const commentLink = page.locator('a[href*="/comment/"]').first();
-    if (await commentLink.isVisible()) {
-      await commentLink.click();
-      await expect(page).toHaveURL(/\/comment\/\d+/);
-      await expect(page.locator("body")).toContainText(commentText);
-      // Should have a "view in context" link
-      await expect(page.getByRole("link", { name: "view in context" })).toBeVisible();
-    }
+    await expect(commentLink).toBeVisible();
+    await commentLink.click();
+    await expect(page).toHaveURL(/\/comment\/\d+/);
+    await expect(page.locator("body")).toContainText(commentText);
+    // Should have a "view in context" link
+    await expect(page.getByRole("link", { name: "view in context" })).toBeVisible();
   });
 });

@@ -29,10 +29,9 @@ test.describe("Upvoting", () => {
     // The post auto-upvotes on creation (score=1).
     // Find the vote button and click to unvote (toggle).
     const voteForm = page.locator('form[action*="/vote"]');
-    if (await voteForm.isVisible()) {
-      await voteForm.locator("button[type='submit']").click();
-      // Page should reload and post should still be visible
-      await expect(page.locator("body")).toContainText(title);
-    }
+    await expect(voteForm).toBeVisible();
+    await voteForm.locator("button[type='submit']").click();
+    // Page should reload and post should still be visible
+    await expect(page.locator("body")).toContainText(title);
   });
 });

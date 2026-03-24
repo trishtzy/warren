@@ -1,25 +1,33 @@
-import { execSync, spawn, type ChildProcess } from "child_process";
+import { spawn } from "child_process";
+import { writeFileSync } from "fs";
+import { tmpdir } from "os";
 import path from "path";
 
-const TEST_DB_URL =
+const DEFAULT_DB_URL =
   "postgresql://rabbithole:rabbithole@127.0.0.1:5433/rabbithole_test?sslmode=disable";
 const PORT = "8080";
 const ROOT = path.resolve(__dirname, "..");
 
+export const PID_FILE = path.join(tmpdir(), "warren-e2e-server.pid");
+
 async function globalSetup() {
+  const dbUrl = process.env.DATABASE_URL || DEFAULT_DB_URL;
+
   // Start the server against the test database.
   const serverProcess = spawn("go", ["run", "./cmd/server/"], {
     cwd: ROOT,
     env: {
       ...process.env,
-      DATABASE_URL: TEST_DB_URL,
+      DATABASE_URL: dbUrl,
       PORT,
     },
     stdio: "pipe",
   });
 
-  // Store for teardown.
-  (globalThis as any).__E2E_SERVER__ = serverProcess;
+  // Write PID to a temp file so globalTeardown (separate process) can kill it.
+  if (serverProcess.pid) {
+    writeFileSync(PID_FILE, serverProcess.pid.toString(), "utf-8");
+  }
 
   // Wait for the server to be ready.
   const maxWait = 30_000;
