@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"html/template"
 	"io/fs"
 	"log"
@@ -12,12 +13,15 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/pressly/goose/v3"
 
 	db "github.com/trishtzy/warren/db/generated"
 	"github.com/trishtzy/warren/internal/handler"
 	"github.com/trishtzy/warren/internal/middleware"
 	"github.com/trishtzy/warren/internal/service"
+	"github.com/trishtzy/warren/migrations"
 	"github.com/trishtzy/warren/templates"
 )
 
@@ -33,6 +37,23 @@ func main() {
 	}
 
 	ctx := context.Background()
+
+	// Run goose migrations before opening the connection pool.
+	sqlDB, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		log.Fatalf("unable to open database for migrations: %v", err)
+	}
+	goose.SetBaseFS(migrations.FS)
+	if err := goose.SetDialect("postgres"); err != nil {
+		log.Fatalf("goose set dialect: %v", err)
+	}
+	if err := goose.Up(sqlDB, "."); err != nil {
+		log.Fatalf("goose migrations failed: %v", err)
+	}
+	if err := sqlDB.Close(); err != nil {
+		log.Fatalf("unable to close migration db: %v", err)
+	}
+	log.Println("migrations applied")
 
 	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
