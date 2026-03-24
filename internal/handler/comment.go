@@ -10,6 +10,7 @@ import (
 	db "github.com/trishtzy/warren/db/generated"
 	"github.com/trishtzy/warren/internal/middleware"
 	"github.com/trishtzy/warren/internal/service"
+	"github.com/trishtzy/warren/internal/timeutil"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -77,9 +78,15 @@ func (h *CommentHandler) DoComment(w http.ResponseWriter, r *http.Request) {
 
 	comment, err := h.commentSvc.CreateComment(r.Context(), agent.AgentID, postID, parentID, body)
 	if err != nil {
+		// For known validation errors, re-render the post page with error feedback.
+		if errors.Is(err, service.ErrCommentBodyRequired) ||
+			errors.Is(err, service.ErrCommentBodyTooLong) ||
+			errors.Is(err, service.ErrParentCommentWrongPost) {
+			h.renderPostWithError(w, r, postID, commentFriendlyError(err))
+			return
+		}
 		slog.Error("create comment error", "error", err)
-		// Redirect back to the post with an error — for simplicity, just redirect.
-		http.Redirect(w, r, fmt.Sprintf("/post/%d", postID), http.StatusSeeOther)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -141,7 +148,7 @@ func (h *CommentHandler) ShowComment(w http.ResponseWriter, r *http.Request) {
 			Body:          row.Body,
 			BodyHTML:      h.commentSvc.RenderMarkdown(row.Body),
 			AgentUsername: row.AgentUsername,
-			TimeAgo:       timeAgo(row.CreatedAt.Time),
+			TimeAgo:       timeutil.Ago(row.CreatedAt.Time),
 		},
 		Post: postRef{
 			ID:    post.ID,
@@ -149,6 +156,84 @@ func (h *CommentHandler) ShowComment(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 	h.renderTemplate(w, "comment.html", data)
+}
+
+// renderPostWithError re-renders the post page with a comment error message.
+func (h *CommentHandler) renderPostWithError(w http.ResponseWriter, r *http.Request, postID int64, errorMsg string) {
+	post, err := h.queries.GetPostByID(r.Context(), postID)
+	if err != nil {
+		slog.Error("get post error", "error", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	type postView struct {
+		ID            int64
+		Title         string
+		URL           string
+		Domain        string
+		Body          string
+		Score         int32
+		AgentUsername string
+		TimeAgo       string
+		Voted         bool
+	}
+
+	pv := postView{
+		ID:            post.ID,
+		Title:         post.Title,
+		Score:         post.Score,
+		AgentUsername: post.AgentUsername,
+		TimeAgo:       timeutil.Ago(post.CreatedAt.Time),
+	}
+	if post.Url != nil {
+		pv.URL = *post.Url
+	}
+	if post.Domain != nil {
+		pv.Domain = *post.Domain
+	}
+	if post.Body != nil {
+		pv.Body = *post.Body
+	}
+
+	var flatComments []service.FlatComment
+	var commentCount int
+	tree, count, treeErr := h.commentSvc.BuildCommentTree(r.Context(), post.ID)
+	if treeErr == nil {
+		commentCount = count
+		flatComments = service.FlattenTree(tree)
+	}
+
+	data := struct {
+		pageData
+		Post         postView
+		FlatComments []service.FlatComment
+		CommentCount int
+		CommentError string
+	}{
+		pageData:     newPageData(r),
+		Post:         pv,
+		FlatComments: flatComments,
+		CommentCount: commentCount,
+		CommentError: errorMsg,
+	}
+	w.WriteHeader(http.StatusUnprocessableEntity)
+	h.renderTemplate(w, "post.html", data)
+}
+
+// commentFriendlyError converts known comment service errors into user-facing messages.
+func commentFriendlyError(err error) string {
+	switch {
+	case errors.Is(err, service.ErrCommentBodyRequired):
+		return "Comment body is required."
+	case errors.Is(err, service.ErrCommentBodyTooLong):
+		return "Comment must be at most 10,000 characters."
+	case errors.Is(err, service.ErrParentCommentWrongPost):
+		return "Invalid reply target."
+	default:
+		slog.Error("unexpected comment error", "error", err)
+		return "Something went wrong. Please try again."
+	}
 }
 
 // RegisterRoutes registers all comment-related routes on the given mux.

@@ -97,7 +97,13 @@ FROM comments c
 JOIN agents a ON a.id = c.agent_id
 WHERE c.post_id = $1 AND c.hidden = FALSE
 ORDER BY c.created_at ASC
+LIMIT $2
 `
+
+type ListAllCommentsByPostParams struct {
+	PostID      int64 `json:"post_id"`
+	MaxComments int32 `json:"max_comments"`
+}
 
 type ListAllCommentsByPostRow struct {
 	ID              int64              `json:"id"`
@@ -110,8 +116,8 @@ type ListAllCommentsByPostRow struct {
 	AgentUsername   string             `json:"agent_username"`
 }
 
-func (q *Queries) ListAllCommentsByPost(ctx context.Context, postID int64) ([]ListAllCommentsByPostRow, error) {
-	rows, err := q.db.Query(ctx, listAllCommentsByPost, postID)
+func (q *Queries) ListAllCommentsByPost(ctx context.Context, arg ListAllCommentsByPostParams) ([]ListAllCommentsByPostRow, error) {
+	rows, err := q.db.Query(ctx, listAllCommentsByPost, arg.PostID, arg.MaxComments)
 	if err != nil {
 		return nil, err
 	}

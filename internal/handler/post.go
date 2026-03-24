@@ -8,11 +8,11 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 
 	db "github.com/trishtzy/warren/db/generated"
 	"github.com/trishtzy/warren/internal/middleware"
 	"github.com/trishtzy/warren/internal/service"
+	"github.com/trishtzy/warren/internal/timeutil"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -75,7 +75,7 @@ func (h *PostHandler) ListPosts(w http.ResponseWriter, r *http.Request) {
 			Title:         p.Title,
 			Score:         p.Score,
 			AgentUsername: p.AgentUsername,
-			TimeAgo:       timeAgo(p.CreatedAt.Time),
+			TimeAgo:       timeutil.Ago(p.CreatedAt.Time),
 			Voted:         votedSet[p.ID],
 		}
 		if p.Url != nil {
@@ -234,7 +234,7 @@ func (h *PostHandler) ShowPost(w http.ResponseWriter, r *http.Request) {
 		Title:         post.Title,
 		Score:         post.Score,
 		AgentUsername: post.AgentUsername,
-		TimeAgo:       timeAgo(post.CreatedAt.Time),
+		TimeAgo:       timeutil.Ago(post.CreatedAt.Time),
 	}
 	if post.Url != nil {
 		pv.URL = *post.Url
@@ -368,29 +368,3 @@ func postFriendlyError(err error) string {
 	}
 }
 
-// timeAgo returns a human-readable relative time string.
-func timeAgo(t time.Time) string {
-	d := time.Since(t)
-	switch {
-	case d < time.Minute:
-		return "just now"
-	case d < time.Hour:
-		m := int(d.Minutes())
-		if m == 1 {
-			return "1 minute ago"
-		}
-		return fmt.Sprintf("%d minutes ago", m)
-	case d < 24*time.Hour:
-		h := int(d.Hours())
-		if h == 1 {
-			return "1 hour ago"
-		}
-		return fmt.Sprintf("%d hours ago", h)
-	default:
-		days := int(d.Hours() / 24)
-		if days == 1 {
-			return "1 day ago"
-		}
-		return fmt.Sprintf("%d days ago", days)
-	}
-}

@@ -4,28 +4,31 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"html/template"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/yuin/goldmark"
 
 	db "github.com/trishtzy/warren/db/generated"
+	"github.com/trishtzy/warren/internal/timeutil"
 )
 
 var (
-	ErrCommentBodyRequired = errors.New("comment body is required")
-	ErrCommentBodyTooLong  = errors.New("comment body must be at most 10000 characters")
+	ErrCommentBodyRequired    = errors.New("comment body is required")
+	ErrCommentBodyTooLong     = errors.New("comment body must be at most 10000 characters")
+	ErrParentCommentWrongPost = errors.New("parent comment does not belong to this post")
 )
+
+// MaxCommentsPerPost is the maximum number of comments loaded for tree building.
+const MaxCommentsPerPost = 2000
 
 // CommentQuerier defines the database methods required by CommentService.
 type CommentQuerier interface {
 	CreateComment(ctx context.Context, arg db.CreateCommentParams) (db.Comment, error)
 	GetCommentByID(ctx context.Context, id int64) (db.GetCommentByIDRow, error)
-	ListAllCommentsByPost(ctx context.Context, postID int64) ([]db.ListAllCommentsByPostRow, error)
+	ListAllCommentsByPost(ctx context.Context, arg db.ListAllCommentsByPostParams) ([]db.ListAllCommentsByPostRow, error)
 	CountCommentsByPost(ctx context.Context, postID int64) (int64, error)
 }
 
@@ -39,6 +42,8 @@ type CommentService struct {
 // NewCommentService creates a new CommentService.
 func NewCommentService(queries CommentQuerier) *CommentService {
 	policy := bluemonday.UGCPolicy()
+	policy.RequireNoReferrerOnLinks(true)
+	policy.AddTargetBlankToFullyQualifiedLinks(true)
 	return &CommentService{
 		queries:  queries,
 		md:       goldmark.New(),
@@ -54,6 +59,17 @@ func (s *CommentService) CreateComment(ctx context.Context, agentID, postID int6
 	}
 	if utf8.RuneCountInString(body) > 10000 {
 		return db.Comment{}, ErrCommentBodyTooLong
+	}
+
+	// Validate that parent comment belongs to the same post.
+	if parentCommentID != nil {
+		parent, err := s.queries.GetCommentByID(ctx, *parentCommentID)
+		if err != nil {
+			return db.Comment{}, ErrParentCommentWrongPost
+		}
+		if parent.PostID != postID {
+			return db.Comment{}, ErrParentCommentWrongPost
+		}
 	}
 
 	return s.queries.CreateComment(ctx, db.CreateCommentParams{
@@ -78,9 +94,12 @@ type CommentTree struct {
 	Children        []*CommentTree
 }
 
-// BuildCommentTree fetches all comments for a post and builds a nested tree.
+// BuildCommentTree fetches comments for a post (up to MaxCommentsPerPost) and builds a nested tree.
 func (s *CommentService) BuildCommentTree(ctx context.Context, postID int64) ([]*CommentTree, int, error) {
-	rows, err := s.queries.ListAllCommentsByPost(ctx, postID)
+	rows, err := s.queries.ListAllCommentsByPost(ctx, db.ListAllCommentsByPostParams{
+		PostID:      postID,
+		MaxComments: MaxCommentsPerPost,
+	})
 	if err != nil {
 		return nil, 0, err
 	}
@@ -98,7 +117,7 @@ func (s *CommentService) BuildCommentTree(ctx context.Context, postID int64) ([]
 			Body:            r.Body,
 			BodyHTML:        s.RenderMarkdown(r.Body),
 			AgentUsername:   r.AgentUsername,
-			TimeAgo:         timeAgo(r.CreatedAt.Time),
+			TimeAgo:         timeutil.Ago(r.CreatedAt.Time),
 		}
 		nodeMap[r.ID] = node
 	}
@@ -187,33 +206,6 @@ func FlattenTree(roots []*CommentTree) []FlatComment {
 	}
 	walk(roots)
 	return result
-}
-
-// timeAgo returns a human-readable relative time string.
-func timeAgo(t time.Time) string {
-	d := time.Since(t)
-	switch {
-	case d < time.Minute:
-		return "just now"
-	case d < time.Hour:
-		m := int(d.Minutes())
-		if m == 1 {
-			return "1 minute ago"
-		}
-		return fmt.Sprintf("%d minutes ago", m)
-	case d < 24*time.Hour:
-		h := int(d.Hours())
-		if h == 1 {
-			return "1 hour ago"
-		}
-		return fmt.Sprintf("%d hours ago", h)
-	default:
-		days := int(d.Hours() / 24)
-		if days == 1 {
-			return "1 day ago"
-		}
-		return fmt.Sprintf("%d days ago", days)
-	}
 }
 
 // RenderMarkdown converts markdown to sanitized HTML.

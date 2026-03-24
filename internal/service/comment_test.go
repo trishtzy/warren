@@ -52,10 +52,10 @@ func (m *mockCommentQuerier) GetCommentByID(_ context.Context, id int64) (db.Get
 	}, nil
 }
 
-func (m *mockCommentQuerier) ListAllCommentsByPost(_ context.Context, postID int64) ([]db.ListAllCommentsByPostRow, error) {
+func (m *mockCommentQuerier) ListAllCommentsByPost(_ context.Context, arg db.ListAllCommentsByPostParams) ([]db.ListAllCommentsByPostRow, error) {
 	var rows []db.ListAllCommentsByPostRow
 	for _, c := range m.comments {
-		if c.PostID == postID {
+		if c.PostID == arg.PostID {
 			rows = append(rows, db.ListAllCommentsByPostRow{
 				ID:              c.ID,
 				AgentID:         c.AgentID,
@@ -120,14 +120,43 @@ func TestCreateComment_Success(t *testing.T) {
 }
 
 func TestCreateComment_WithParent(t *testing.T) {
-	svc := NewCommentService(newMockCommentQuerier())
-	parentID := int64(42)
+	mock := newMockCommentQuerier()
+	// Pre-populate a parent comment on post 1.
+	mock.comments[1] = db.Comment{ID: 1, AgentID: 1, PostID: 1, Body: "parent"}
+	mock.nextCommentID = 2
+
+	svc := NewCommentService(mock)
+	parentID := int64(1)
 	c, err := svc.CreateComment(context.Background(), 1, 1, &parentID, "reply")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if c.ParentCommentID == nil || *c.ParentCommentID != 42 {
-		t.Errorf("expected parent 42, got %v", c.ParentCommentID)
+	if c.ParentCommentID == nil || *c.ParentCommentID != 1 {
+		t.Errorf("expected parent 1, got %v", c.ParentCommentID)
+	}
+}
+
+func TestCreateComment_CrossPostReply(t *testing.T) {
+	mock := newMockCommentQuerier()
+	// Parent comment belongs to post 1.
+	mock.comments[1] = db.Comment{ID: 1, AgentID: 1, PostID: 1, Body: "parent on post 1"}
+	mock.nextCommentID = 2
+
+	svc := NewCommentService(mock)
+	parentID := int64(1)
+	// Try to reply on post 2 with a parent from post 1 — should be rejected.
+	_, err := svc.CreateComment(context.Background(), 1, 2, &parentID, "cross-post reply")
+	if err != ErrParentCommentWrongPost {
+		t.Errorf("expected ErrParentCommentWrongPost, got %v", err)
+	}
+}
+
+func TestCreateComment_NonexistentParent(t *testing.T) {
+	svc := NewCommentService(newMockCommentQuerier())
+	parentID := int64(999)
+	_, err := svc.CreateComment(context.Background(), 1, 1, &parentID, "orphan reply")
+	if err != ErrParentCommentWrongPost {
+		t.Errorf("expected ErrParentCommentWrongPost, got %v", err)
 	}
 }
 
@@ -152,6 +181,16 @@ func TestRenderMarkdown_CodeBlock(t *testing.T) {
 	html := svc.RenderMarkdown("```\ncode\n```")
 	if !strings.Contains(string(html), "<code>") {
 		t.Errorf("expected code block rendering, got %q", html)
+	}
+}
+
+func TestRenderMarkdown_LinkRelAttributes(t *testing.T) {
+	svc := NewCommentService(newMockCommentQuerier())
+	html := string(svc.RenderMarkdown("[example](https://example.com)"))
+	if !strings.Contains(html, `rel="nofollow noreferrer noopener"`) &&
+		!strings.Contains(html, `rel="noreferrer nofollow noopener"`) &&
+		!strings.Contains(html, `rel="noopener noreferrer nofollow"`) {
+		t.Errorf("expected rel with noreferrer and noopener, got %q", html)
 	}
 }
 

@@ -21,6 +21,7 @@
 
 {{if $.Agent}}
 <div style="margin-top:1em">
+  {{if .CommentError}}<p style="color:red">{{.CommentError}}</p>{{end}}
   <form method="POST" action="/post/{{.Post.ID}}/comment">
     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
     <textarea name="body" rows="4" cols="60" placeholder="Write a comment (markdown supported)..." required></textarea><br>

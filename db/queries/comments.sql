@@ -30,7 +30,8 @@ SELECT c.id, c.agent_id, c.post_id, c.parent_comment_id, c.body, c.hidden, c.cre
 FROM comments c
 JOIN agents a ON a.id = c.agent_id
 WHERE c.post_id = sqlc.arg(post_id) AND c.hidden = FALSE
-ORDER BY c.created_at ASC;
+ORDER BY c.created_at ASC
+LIMIT sqlc.arg(max_comments);
 
 -- name: CountCommentsByPost :one
 SELECT count(*) FROM comments WHERE post_id = sqlc.arg(post_id) AND hidden = FALSE;
