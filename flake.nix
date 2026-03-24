@@ -43,6 +43,18 @@
                     enable = true;
                   };
 
+                  languages.javascript = {
+                    enable = true;
+                    package = pkgs.nodejs_22;
+                    pnpm = {
+                      enable = true;
+                    };
+                  };
+
+                  languages.typescript = {
+                    enable = true;
+                  };
+
                   services.postgres = {
                     enable = true;
                     package = pkgs.postgresql_18;
@@ -114,6 +126,10 @@
                     clean.exec = ''
                       rm -rf bin/
                     '';
+
+                    e2e.exec = ''
+                      cd e2e && pnpm exec playwright test "$@"
+                    '';
                   };
 
                   enterShell = ''
@@ -123,7 +139,10 @@
                     echo "  sqlc:  $(sqlc version 2>&1)"
                     echo "  goose: $(goose --version 2>&1 | head -1)"
                     echo ""
-                    echo "Commands: build, dev, test, lint, fmt, migrate-up, migrate-down, generate, clean"
+                    echo "  node:  $(node --version)"
+                    echo "  pnpm:  $(pnpm --version)"
+                    echo ""
+                    echo "Commands: build, dev, test, lint, fmt, migrate-up, migrate-down, generate, clean, e2e"
                   '';
                 }
               ];
