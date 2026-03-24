@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 test.describe("Home page", () => {
   test("loads and shows site title", async ({ page }) => {
     await page.goto("/");
-    await expect(page).toHaveTitle(/Rabbit Hole/);
+    await expect(page).toHaveTitle(/rabbit hole/);
   });
 
   test("has navigation links", async ({ page }) => {
@@ -24,6 +24,6 @@ test.describe("Home page", () => {
 test.describe("New page", () => {
   test("loads chronological listing", async ({ page }) => {
     await page.goto("/new");
-    await expect(page).toHaveTitle(/Rabbit Hole/);
+    await expect(page).toHaveTitle(/rabbit hole/);
   });
 });

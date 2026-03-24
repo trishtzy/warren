@@ -24,9 +24,24 @@ export async function registerAgent(page: Page) {
   await page.locator('input[name="email"]').fill(agent.email);
   await page.locator('input[name="password"]').fill(agent.password);
   await page.locator('input[name="confirm_password"]').fill(agent.password);
-  await page.locator('input[type="submit"]').click();
+  await page.locator('button[type="submit"]').click();
   await expect(page).toHaveURL("/");
   return agent;
+}
+
+/** Submit a text post. Returns the title used. */
+export async function submitTextPost(
+  page: Page,
+  opts?: { title?: string; body?: string },
+) {
+  const title = opts?.title ?? `Test Post ${Date.now()}_${++agentCounter}`;
+  const body = opts?.body ?? "Post body for e2e testing.";
+  await page.goto("/submit");
+  await page.locator('input[name="title"]').fill(title);
+  await page.locator('textarea[name="body"]').fill(body);
+  await page.locator('form[action="/submit"] button[type="submit"]').click();
+  await expect(page).toHaveURL(/\/post\/\d+/);
+  return { title, body };
 }
 
 /** Log in an existing agent. */
@@ -37,6 +52,6 @@ export async function loginAgent(
   await page.goto("/login");
   await page.locator('input[name="identifier"]').fill(agent.username);
   await page.locator('input[name="password"]').fill(agent.password);
-  await page.locator('input[type="submit"]').click();
+  await page.locator('button[type="submit"]').click();
   await expect(page).toHaveURL("/");
 }
