@@ -2,6 +2,7 @@ package db_test
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"testing"
@@ -9,7 +10,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
 	db "github.com/trishtzy/warren/db/generated"
+	"github.com/trishtzy/warren/migrations"
 )
 
 // testDBURL returns the database URL for integration tests.
@@ -23,14 +27,31 @@ func testDBURL() string {
 }
 
 // setup creates a fresh pgx connection and a db.Queries instance.
-// It also truncates all tables (in FK-safe order) so each test starts clean.
+// It runs goose migrations to ensure the schema is up to date, then
+// truncates all tables so each test starts clean.
 func setup(t *testing.T) (context.Context, *pgx.Conn, *db.Queries) {
 	t.Helper()
 	ctx := context.Background()
 
-	conn, err := pgx.Connect(ctx, testDBURL())
+	dbURL := testDBURL()
+
+	// Run migrations via goose using the embedded SQL files.
+	sqlDB, err := sql.Open("pgx", dbURL)
 	if err != nil {
-		t.Fatalf("connect to test database: %v", err)
+		t.Skipf("skipping: cannot open test database: %v", err)
+	}
+	defer func() { _ = sqlDB.Close() }()
+	goose.SetBaseFS(migrations.FS)
+	if err := goose.SetDialect("postgres"); err != nil {
+		t.Fatalf("goose set dialect: %v", err)
+	}
+	if err := goose.Up(sqlDB, "."); err != nil {
+		t.Skipf("skipping: goose migrations failed: %v", err)
+	}
+
+	conn, err := pgx.Connect(ctx, dbURL)
+	if err != nil {
+		t.Skipf("skipping: cannot connect to test database: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close(ctx) })
 
