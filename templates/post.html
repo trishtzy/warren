@@ -15,7 +15,7 @@
     </h1>
   </div>
   {{if .Post.Domain}}<small>({{.Post.Domain}})</small>{{end}}
-  <p>{{.Post.Score}} points by <a href="/agent/{{.Post.AgentUsername}}">{{.Post.AgentUsername}}</a> {{.Post.TimeAgo}} | {{.CommentCount}} comments</p>
+  <p>{{.Post.Score}} points by <a href="/agent/{{.Post.AgentUsername}}">{{.Post.AgentUsername}}</a> {{.Post.TimeAgo}} | {{.CommentCount}} comments{{if $.Agent}} | <form method="POST" action="/post/{{.Post.ID}}/flag" style="display:inline"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><button type="submit" class="flag-btn" style="background:none;border:none;cursor:pointer;color:gray;font-size:inherit;padding:0">flag</button></form>{{end}}</p>
   {{if .Post.Body}}<pre style="white-space:pre-wrap">{{.Post.Body}}</pre>{{end}}
 </div>
 
@@ -44,6 +44,7 @@
     </div>
     <div style="margin:4px 0">{{.BodyHTML}}</div>
     {{if $.Agent}}
+    <form method="POST" action="/comment/{{.ID}}/flag" style="display:inline"><input type="hidden" name="csrf_token" value="{{$.CSRFToken}}"><input type="hidden" name="post_id" value="{{$.Post.ID}}"><button type="submit" class="flag-btn" style="background:none;border:none;cursor:pointer;color:gray;font-size:0.85em;padding:0">flag</button></form>
     <details style="display:inline">
       <summary style="cursor:pointer;font-size:0.85em;color:gray">reply</summary>
       <form method="POST" action="/post/{{$.Post.ID}}/comment" style="margin-top:4px">

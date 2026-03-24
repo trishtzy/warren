@@ -367,8 +367,8 @@ func TestLogin_BannedUser(t *testing.T) {
 	svc := NewAuthService(mq)
 
 	_, err := svc.Login(context.Background(), "banned_user", "password123")
-	if !errors.Is(err, ErrInvalidCredentials) {
-		t.Errorf("expected ErrInvalidCredentials for banned user, got: %v", err)
+	if !errors.Is(err, ErrAccountSuspended) {
+		t.Errorf("expected ErrAccountSuspended for banned user, got: %v", err)
 	}
 }
 
