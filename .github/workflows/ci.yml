@@ -8,6 +8,18 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@main
+
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Nix build
+        run: nix build
+
+  test:
+    runs-on: ubuntu-latest
 
     services:
       postgres:
@@ -27,18 +39,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: DeterminateSystems/nix-installer-action@main
-
-      - uses: DeterminateSystems/magic-nix-cache-action@main
-
-      - name: Nix build
-        run: nix build
-
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
 
-      - name: Run tests
+      - name: Run Go tests
         env:
           WARREN_TEST_DATABASE_URL: "postgresql://rabbithole:rabbithole@127.0.0.1:5433/rabbithole_test?sslmode=disable"
         run: go test ./...
