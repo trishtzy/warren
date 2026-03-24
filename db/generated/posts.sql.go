@@ -145,7 +145,8 @@ func (q *Queries) GetPostsByURL(ctx context.Context, url *string) ([]GetPostsByU
 
 const listPostsByNew = `-- name: ListPostsByNew :many
 SELECT p.id, p.agent_id, p.title, p.url, p.body, p.domain, p.score, p.hidden, p.created_at,
-       a.username AS agent_username
+       a.username AS agent_username,
+       (SELECT count(*) FROM comments c WHERE c.post_id = p.id AND c.hidden = FALSE) AS comment_count
 FROM posts p
 JOIN agents a ON a.id = p.agent_id
 WHERE p.hidden = FALSE
@@ -169,6 +170,7 @@ type ListPostsByNewRow struct {
 	Hidden        bool               `json:"hidden"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	AgentUsername string             `json:"agent_username"`
+	CommentCount  int64              `json:"comment_count"`
 }
 
 func (q *Queries) ListPostsByNew(ctx context.Context, arg ListPostsByNewParams) ([]ListPostsByNewRow, error) {
@@ -191,6 +193,7 @@ func (q *Queries) ListPostsByNew(ctx context.Context, arg ListPostsByNewParams) 
 			&i.Hidden,
 			&i.CreatedAt,
 			&i.AgentUsername,
+			&i.CommentCount,
 		); err != nil {
 			return nil, err
 		}
@@ -202,22 +205,24 @@ func (q *Queries) ListPostsByNew(ctx context.Context, arg ListPostsByNewParams) 
 	return items, nil
 }
 
-const listPostsByScore = `-- name: ListPostsByScore :many
+const listPostsRanked = `-- name: ListPostsRanked :many
 SELECT p.id, p.agent_id, p.title, p.url, p.body, p.domain, p.score, p.hidden, p.created_at,
-       a.username AS agent_username
+       a.username AS agent_username,
+       (SELECT count(*) FROM comments c WHERE c.post_id = p.id AND c.hidden = FALSE) AS comment_count
 FROM posts p
 JOIN agents a ON a.id = p.agent_id
 WHERE p.hidden = FALSE
-ORDER BY p.score DESC, p.created_at DESC
-LIMIT $2 OFFSET $1
+ORDER BY (p.score::float / power(EXTRACT(EPOCH FROM (now() - p.created_at)) / 3600 + 2, $1::float)) DESC, p.created_at DESC
+LIMIT $3 OFFSET $2
 `
 
-type ListPostsByScoreParams struct {
-	RowOffset int32 `json:"row_offset"`
-	RowLimit  int32 `json:"row_limit"`
+type ListPostsRankedParams struct {
+	Gravity   float64 `json:"gravity"`
+	RowOffset int32   `json:"row_offset"`
+	RowLimit  int32   `json:"row_limit"`
 }
 
-type ListPostsByScoreRow struct {
+type ListPostsRankedRow struct {
 	ID            int64              `json:"id"`
 	AgentID       int64              `json:"agent_id"`
 	Title         string             `json:"title"`
@@ -228,17 +233,18 @@ type ListPostsByScoreRow struct {
 	Hidden        bool               `json:"hidden"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	AgentUsername string             `json:"agent_username"`
+	CommentCount  int64              `json:"comment_count"`
 }
 
-func (q *Queries) ListPostsByScore(ctx context.Context, arg ListPostsByScoreParams) ([]ListPostsByScoreRow, error) {
-	rows, err := q.db.Query(ctx, listPostsByScore, arg.RowOffset, arg.RowLimit)
+func (q *Queries) ListPostsRanked(ctx context.Context, arg ListPostsRankedParams) ([]ListPostsRankedRow, error) {
+	rows, err := q.db.Query(ctx, listPostsRanked, arg.Gravity, arg.RowOffset, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListPostsByScoreRow{}
+	items := []ListPostsRankedRow{}
 	for rows.Next() {
-		var i ListPostsByScoreRow
+		var i ListPostsRankedRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.AgentID,
@@ -250,6 +256,7 @@ func (q *Queries) ListPostsByScore(ctx context.Context, arg ListPostsByScorePara
 			&i.Hidden,
 			&i.CreatedAt,
 			&i.AgentUsername,
+			&i.CommentCount,
 		); err != nil {
 			return nil, err
 		}

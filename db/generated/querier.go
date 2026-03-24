@@ -35,7 +35,7 @@ type Querier interface {
 	ListCommentsByPost(ctx context.Context, arg ListCommentsByPostParams) ([]ListCommentsByPostRow, error)
 	ListFlagsByTarget(ctx context.Context, arg ListFlagsByTargetParams) ([]Flag, error)
 	ListPostsByNew(ctx context.Context, arg ListPostsByNewParams) ([]ListPostsByNewRow, error)
-	ListPostsByScore(ctx context.Context, arg ListPostsByScoreParams) ([]ListPostsByScoreRow, error)
+	ListPostsRanked(ctx context.Context, arg ListPostsRankedParams) ([]ListPostsRankedRow, error)
 	ListVotedPostIDsByAgent(ctx context.Context, agentID int64) ([]int64, error)
 	UpdateAgentBanned(ctx context.Context, arg UpdateAgentBannedParams) error
 	UpdateCommentHidden(ctx context.Context, arg UpdateCommentHiddenParams) error

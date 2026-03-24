@@ -84,6 +84,10 @@ func (m *mockPostStore) ListPostsByNew(_ context.Context, _ db.ListPostsByNewPar
 	return nil, nil
 }
 
+func (m *mockPostStore) ListPostsRanked(_ context.Context, _ db.ListPostsRankedParams) ([]db.ListPostsRankedRow, error) {
+	return nil, nil
+}
+
 func (m *mockPostStore) CountPosts(_ context.Context) (int64, error) {
 	return int64(len(m.posts)), nil
 }

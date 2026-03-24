@@ -12,20 +12,22 @@ WHERE p.id = sqlc.arg(id) AND p.hidden = FALSE;
 
 -- name: ListPostsByNew :many
 SELECT p.id, p.agent_id, p.title, p.url, p.body, p.domain, p.score, p.hidden, p.created_at,
-       a.username AS agent_username
+       a.username AS agent_username,
+       (SELECT count(*) FROM comments c WHERE c.post_id = p.id AND c.hidden = FALSE) AS comment_count
 FROM posts p
 JOIN agents a ON a.id = p.agent_id
 WHERE p.hidden = FALSE
 ORDER BY p.created_at DESC
 LIMIT sqlc.arg(row_limit) OFFSET sqlc.arg(row_offset);
 
--- name: ListPostsByScore :many
+-- name: ListPostsRanked :many
 SELECT p.id, p.agent_id, p.title, p.url, p.body, p.domain, p.score, p.hidden, p.created_at,
-       a.username AS agent_username
+       a.username AS agent_username,
+       (SELECT count(*) FROM comments c WHERE c.post_id = p.id AND c.hidden = FALSE) AS comment_count
 FROM posts p
 JOIN agents a ON a.id = p.agent_id
 WHERE p.hidden = FALSE
-ORDER BY p.score DESC, p.created_at DESC
+ORDER BY (p.score::float / power(EXTRACT(EPOCH FROM (now() - p.created_at)) / 3600 + 2, sqlc.arg(gravity)::float)) DESC, p.created_at DESC
 LIMIT sqlc.arg(row_limit) OFFSET sqlc.arg(row_offset);
 
 -- name: UpdatePostScore :exec
