@@ -15,9 +15,11 @@ import (
 	"github.com/trishtzy/warren/internal/timeutil"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const postsPerPage = 30
+const maxPage = 100
 
 // PostHandler handles HTTP requests for post submission and viewing.
 type PostHandler struct {
@@ -61,7 +63,7 @@ type postListData struct {
 
 func parsePage(r *http.Request) int {
 	p, err := strconv.Atoi(r.URL.Query().Get("p"))
-	if err != nil || p < 1 {
+	if err != nil || p < 1 || p > maxPage {
 		return 1
 	}
 	return p
@@ -72,6 +74,42 @@ func (h *PostHandler) buildVotedSet(r *http.Request) (map[int64]bool, error) {
 		return h.svc.VotedPostIDs(r.Context(), agent.AgentID)
 	}
 	return nil, nil
+}
+
+// postRow is the common subset of fields shared by ListPostsRankedRow and ListPostsByNewRow.
+type postRow struct {
+	ID            int64
+	Title         string
+	Url           *string
+	Domain        *string
+	Score         int32
+	AgentUsername string
+	CreatedAt     pgtype.Timestamptz
+	CommentCount  int64
+}
+
+func buildPostItems(rows []postRow, offset int32, votedSet map[int64]bool) []postItem {
+	items := make([]postItem, 0, len(rows))
+	for i, p := range rows {
+		item := postItem{
+			Rank:          int(offset) + i + 1,
+			ID:            p.ID,
+			Title:         p.Title,
+			Score:         p.Score,
+			AgentUsername: p.AgentUsername,
+			TimeAgo:       timeutil.Ago(p.CreatedAt.Time),
+			Voted:         votedSet[p.ID],
+			CommentCount:  p.CommentCount,
+		}
+		if p.Url != nil {
+			item.URL = *p.Url
+		}
+		if p.Domain != nil {
+			item.Domain = *p.Domain
+		}
+		items = append(items, item)
+	}
+	return items
 }
 
 // ListPosts renders the home page with ranked posts.
@@ -95,35 +133,19 @@ func (h *PostHandler) ListPosts(w http.ResponseWriter, r *http.Request) {
 		posts = posts[:postsPerPage]
 	}
 
+	rows := make([]postRow, len(posts))
+	for i, p := range posts {
+		rows[i] = postRow{ID: p.ID, Title: p.Title, Url: p.Url, Domain: p.Domain, Score: p.Score, AgentUsername: p.AgentUsername, CreatedAt: p.CreatedAt, CommentCount: p.CommentCount}
+	}
+
 	votedSet, err := h.buildVotedSet(r)
 	if err != nil {
 		slog.Error("voted post ids error", "error", err)
 	}
 
-	items := make([]postItem, 0, len(posts))
-	for i, p := range posts {
-		item := postItem{
-			Rank:          int(offset) + i + 1,
-			ID:            p.ID,
-			Title:         p.Title,
-			Score:         p.Score,
-			AgentUsername: p.AgentUsername,
-			TimeAgo:       timeutil.Ago(p.CreatedAt.Time),
-			Voted:         votedSet[p.ID],
-			CommentCount:  p.CommentCount,
-		}
-		if p.Url != nil {
-			item.URL = *p.Url
-		}
-		if p.Domain != nil {
-			item.Domain = *p.Domain
-		}
-		items = append(items, item)
-	}
-
 	data := postListData{
 		pageData: newPageData(r),
-		Posts:    items,
+		Posts:    buildPostItems(rows, offset, votedSet),
 		BasePath: "/",
 		Page:     page,
 		HasMore:  hasMore,
@@ -152,35 +174,19 @@ func (h *PostHandler) ListNew(w http.ResponseWriter, r *http.Request) {
 		posts = posts[:postsPerPage]
 	}
 
+	rows := make([]postRow, len(posts))
+	for i, p := range posts {
+		rows[i] = postRow{ID: p.ID, Title: p.Title, Url: p.Url, Domain: p.Domain, Score: p.Score, AgentUsername: p.AgentUsername, CreatedAt: p.CreatedAt, CommentCount: p.CommentCount}
+	}
+
 	votedSet, err := h.buildVotedSet(r)
 	if err != nil {
 		slog.Error("voted post ids error", "error", err)
 	}
 
-	items := make([]postItem, 0, len(posts))
-	for i, p := range posts {
-		item := postItem{
-			Rank:          int(offset) + i + 1,
-			ID:            p.ID,
-			Title:         p.Title,
-			Score:         p.Score,
-			AgentUsername: p.AgentUsername,
-			TimeAgo:       timeutil.Ago(p.CreatedAt.Time),
-			Voted:         votedSet[p.ID],
-			CommentCount:  p.CommentCount,
-		}
-		if p.Url != nil {
-			item.URL = *p.Url
-		}
-		if p.Domain != nil {
-			item.Domain = *p.Domain
-		}
-		items = append(items, item)
-	}
-
 	data := postListData{
 		pageData: newPageData(r),
-		Posts:    items,
+		Posts:    buildPostItems(rows, offset, votedSet),
 		BasePath: "/new",
 		Page:     page,
 		HasMore:  hasMore,
