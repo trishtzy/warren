@@ -22,14 +22,15 @@ type Templates map[string]*template.Template
 
 // AuthHandler handles HTTP requests for registration, login, logout, and profiles.
 type AuthHandler struct {
-	svc     *service.AuthService
-	queries *db.Queries
-	tmpl    Templates
+	svc           *service.AuthService
+	queries       *db.Queries
+	tmpl          Templates
+	secureCookies bool
 }
 
 // NewAuthHandler creates a new AuthHandler.
-func NewAuthHandler(svc *service.AuthService, queries *db.Queries, tmpl Templates) *AuthHandler {
-	return &AuthHandler{svc: svc, queries: queries, tmpl: tmpl}
+func NewAuthHandler(svc *service.AuthService, queries *db.Queries, tmpl Templates, secureCookies bool) *AuthHandler {
+	return &AuthHandler{svc: svc, queries: queries, tmpl: tmpl, secureCookies: secureCookies}
 }
 
 // pageData is the base data passed to every template.
@@ -73,26 +74,26 @@ func executeTemplate(tmpl Templates, w http.ResponseWriter, name string, data an
 }
 
 // setSessionCookie sets the session cookie on the response.
-func setSessionCookie(w http.ResponseWriter, token string) {
+func setSessionCookie(w http.ResponseWriter, token string, secure bool) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session",
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true, // M1: always set Secure flag
+		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   sessionCookieMaxAge,
 	})
 }
 
 // clearSessionCookie removes the session cookie.
-func clearSessionCookie(w http.ResponseWriter) {
+func clearSessionCookie(w http.ResponseWriter, secure bool) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session",
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 	})
@@ -164,7 +165,7 @@ func (h *AuthHandler) DoRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setSessionCookie(w, token)
+	setSessionCookie(w, token, h.secureCookies)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -210,7 +211,7 @@ func (h *AuthHandler) DoLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setSessionCookie(w, token)
+	setSessionCookie(w, token, h.secureCookies)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -222,7 +223,7 @@ func (h *AuthHandler) DoLogout(w http.ResponseWriter, r *http.Request) {
 			slog.Error("logout error", "error", logoutErr)
 		}
 	}
-	clearSessionCookie(w)
+	clearSessionCookie(w, h.secureCookies)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 

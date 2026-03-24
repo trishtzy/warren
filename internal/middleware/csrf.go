@@ -93,52 +93,57 @@ func unmaskToken(maskedHex string) (string, bool) {
 // in the request context (accessible via CSRFToken). On state-changing methods
 // (POST, PUT, PATCH, DELETE), it validates that the form field csrf_token
 // unmasks to match the cookie value.
-func CSRF(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var token string
-		cookie, err := r.Cookie(csrfCookieName)
-		if err == nil && isValidTokenFormat(cookie.Value) {
-			token = cookie.Value
-		} else {
-			token, err = generateToken()
-			if err != nil {
+//
+// The secureCookies parameter controls the Secure flag on the CSRF cookie.
+// Set to false for local development over plain HTTP.
+func CSRF(secureCookies bool) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var token string
+			cookie, err := r.Cookie(csrfCookieName)
+			if err == nil && isValidTokenFormat(cookie.Value) {
+				token = cookie.Value
+			} else {
+				token, err = generateToken()
+				if err != nil {
+					http.Error(w, "internal server error", http.StatusInternalServerError)
+					return
+				}
+				http.SetCookie(w, &http.Cookie{
+					Name:     csrfCookieName,
+					Value:    token,
+					Path:     "/",
+					HttpOnly: true,
+					Secure:   secureCookies,
+					SameSite: http.SameSiteLaxMode,
+				})
+			}
+
+			// Validate on state-changing methods.
+			switch r.Method {
+			case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+				if parseErr := r.ParseForm(); parseErr != nil {
+					http.Error(w, "bad request", http.StatusBadRequest)
+					return
+				}
+				formToken := r.FormValue(csrfFieldName)
+				unmasked, ok := unmaskToken(formToken)
+				if !ok || !tokensMatch(token, unmasked) {
+					http.Error(w, "forbidden - invalid CSRF token", http.StatusForbidden)
+					return
+				}
+			}
+
+			// Generate masked token for templates.
+			maskedToken, maskErr := maskToken(token)
+			if maskErr != nil {
 				http.Error(w, "internal server error", http.StatusInternalServerError)
 				return
 			}
-			http.SetCookie(w, &http.Cookie{
-				Name:     csrfCookieName,
-				Value:    token,
-				Path:     "/",
-				HttpOnly: true,
-				Secure:   true,
-				SameSite: http.SameSiteLaxMode,
-			})
-		}
 
-		// Validate on state-changing methods.
-		switch r.Method {
-		case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
-			if parseErr := r.ParseForm(); parseErr != nil {
-				http.Error(w, "bad request", http.StatusBadRequest)
-				return
-			}
-			formToken := r.FormValue(csrfFieldName)
-			unmasked, ok := unmaskToken(formToken)
-			if !ok || !tokensMatch(token, unmasked) {
-				http.Error(w, "forbidden - invalid CSRF token", http.StatusForbidden)
-				return
-			}
-		}
-
-		// Generate masked token for templates.
-		maskedToken, maskErr := maskToken(token)
-		if maskErr != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Vary", "Cookie")
-		ctx := context.WithValue(r.Context(), csrfTokenKey, maskedToken)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+			w.Header().Set("Vary", "Cookie")
+			ctx := context.WithValue(r.Context(), csrfTokenKey, maskedToken)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
 }

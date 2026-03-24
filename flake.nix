@@ -22,7 +22,7 @@
               pname = "warren";
               version = self.shortRev or self.dirtyShortRev or "dev";
               src = ./.;
-              vendorHash = "sha256-ZZDIpaLwZFDYwYGrSZal+8kG0jgLjf71267IwagD2Bo=";
+              vendorHash = "sha256-y4fiQDa6R0cR74C2tWprSag4gIJ9BtsGLvrX+oBbknA=";
               subPackages = [ "cmd/server" ];
               ldflags = [ "-s" "-w" ];
               env.CGO_ENABLED = "0";
@@ -38,7 +38,9 @@
             default = devenv.lib.mkShell {
               inherit inputs pkgs;
               modules = [
-                {
+                (let
+                  dbUrl = "postgresql://rabbithole:rabbithole@127.0.0.1:5433/rabbithole?sslmode=disable";
+                in {
                   languages.go = {
                     enable = true;
                   };
@@ -112,11 +114,11 @@
                     '';
 
                     migrate-up.exec = ''
-                      goose -dir migrations postgres "postgresql://rabbithole:rabbithole@127.0.0.1:5433/rabbithole?sslmode=disable" up
+                      goose -dir migrations postgres "${dbUrl}" up
                     '';
 
                     migrate-down.exec = ''
-                      goose -dir migrations postgres "postgresql://rabbithole:rabbithole@127.0.0.1:5433/rabbithole?sslmode=disable" down
+                      goose -dir migrations postgres "${dbUrl}" down
                     '';
 
                     generate.exec = ''
@@ -132,6 +134,13 @@
                     '';
                   };
 
+                  env = {
+                    PORT = "8080";
+                    DATABASE_URL = dbUrl;
+                    RANKING_GRAVITY = "1.5";
+                    SECURE_COOKIES = "false";
+                  };
+
                   enterShell = ''
                     echo "rabbit-hole dev environment loaded"
                     echo "  go:    $(go version | cut -d' ' -f3)"
@@ -144,7 +153,7 @@
                     echo ""
                     echo "Commands: build, dev, test, lint, fmt, migrate-up, migrate-down, generate, clean, e2e"
                   '';
-                }
+                })
               ];
             };
           });
