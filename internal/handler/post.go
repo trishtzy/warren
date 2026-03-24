@@ -110,7 +110,10 @@ func (h *PostHandler) ShowSubmit(w http.ResponseWriter, r *http.Request) {
 		URL        string
 		Body       string
 		Force      bool
-		Duplicates []struct{ ID int64; Title string }
+		Duplicates []struct {
+			ID    int64
+			Title string
+		}
 	}{
 		pageData: newPageData(r),
 	}
