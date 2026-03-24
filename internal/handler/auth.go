@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"html/template"
-	"log"
+	"log/slog"
 	"net/http"
 
 	db "github.com/trishtzy/warren/db/generated"
@@ -56,19 +56,19 @@ func (h *AuthHandler) renderTemplate(w http.ResponseWriter, name string, data an
 func executeTemplate(tmpl Templates, w http.ResponseWriter, name string, data any) {
 	t, ok := tmpl[name]
 	if !ok {
-		log.Printf("template not found: %s", name)
+		slog.Error("template not found", "name", name)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	var buf bytes.Buffer
 	if err := t.ExecuteTemplate(&buf, name, data); err != nil {
-		log.Printf("template error: %v", err)
+		slog.Error("template error", "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if _, err := buf.WriteTo(w); err != nil {
-		log.Printf("write error: %v", err)
+		slog.Error("write error", "error", err)
 	}
 }
 
@@ -159,7 +159,7 @@ func (h *AuthHandler) DoRegister(w http.ResponseWriter, r *http.Request) {
 	token, err := h.svc.Login(r.Context(), username, password)
 	if err != nil {
 		// Registration succeeded but login failed — send to login page.
-		log.Printf("auto-login after registration failed: %v", err)
+		slog.Error("auto-login after registration failed", "error", err)
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
@@ -219,7 +219,7 @@ func (h *AuthHandler) DoLogout(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("session")
 	if err == nil {
 		if logoutErr := h.svc.Logout(r.Context(), cookie.Value); logoutErr != nil {
-			log.Printf("logout error: %v", logoutErr)
+			slog.Error("logout error", "error", logoutErr)
 		}
 	}
 	clearSessionCookie(w)
@@ -240,7 +240,7 @@ func (h *AuthHandler) ShowProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("get agent error: %v", err)
+		slog.Error("get agent error", "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -281,7 +281,7 @@ func friendlyError(err error) string {
 	case errors.Is(err, service.ErrInvalidCredentials):
 		return "Invalid username/email or password."
 	default:
-		log.Printf("unexpected error: %v", err)
+		slog.Error("unexpected error", "error", err)
 		return "Something went wrong. Please try again."
 	}
 }

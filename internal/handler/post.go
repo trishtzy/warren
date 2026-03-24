@@ -3,7 +3,7 @@ package handler
 import (
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -40,7 +40,7 @@ func (h *PostHandler) ListPosts(w http.ResponseWriter, r *http.Request) {
 		RowOffset: 0,
 	})
 	if err != nil {
-		log.Printf("list posts error: %v", err)
+		slog.Error("list posts error", "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -50,7 +50,7 @@ func (h *PostHandler) ListPosts(w http.ResponseWriter, r *http.Request) {
 	if agent := middleware.AgentFromContext(r.Context()); agent != nil {
 		votedSet, err = h.svc.VotedPostIDs(r.Context(), agent.AgentID)
 		if err != nil {
-			log.Printf("voted post ids error: %v", err)
+			slog.Error("voted post ids error", "error", err)
 			// Non-fatal: continue without vote indicators.
 			votedSet = nil
 		}
@@ -211,7 +211,7 @@ func (h *PostHandler) ShowPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("get post error: %v", err)
+		slog.Error("get post error", "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -251,7 +251,7 @@ func (h *PostHandler) ShowPost(w http.ResponseWriter, r *http.Request) {
 		if voteErr == nil {
 			pv.Voted = true
 		} else if !errors.Is(voteErr, pgx.ErrNoRows) {
-			log.Printf("vote check error: %v", voteErr)
+			slog.Error("vote check error", "error", voteErr)
 		}
 	}
 
@@ -288,7 +288,7 @@ func (h *PostHandler) DoVote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("get post error: %v", err)
+		slog.Error("get post error", "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -299,13 +299,13 @@ func (h *PostHandler) DoVote(w http.ResponseWriter, r *http.Request) {
 
 	if hasVoted {
 		if _, err := h.svc.Unvote(r.Context(), agent.AgentID, postID); err != nil {
-			log.Printf("unvote error: %v", err)
+			slog.Error("unvote error", "error", err)
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
 		}
 	} else {
 		if _, err := h.svc.Upvote(r.Context(), agent.AgentID, postID); err != nil {
-			log.Printf("upvote error: %v", err)
+			slog.Error("upvote error", "error", err)
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -346,7 +346,7 @@ func postFriendlyError(err error) string {
 	case errors.Is(err, service.ErrBodyTooLong):
 		return "Body must be at most 10,000 characters."
 	default:
-		log.Printf("unexpected post error: %v", err)
+		slog.Error("unexpected post error", "error", err)
 		return "Something went wrong. Please try again."
 	}
 }
