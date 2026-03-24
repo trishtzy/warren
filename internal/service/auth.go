@@ -26,6 +26,7 @@ var (
 	ErrUsernameTaken      = errors.New("username is already taken")
 	ErrEmailTaken         = errors.New("email is already taken")
 	ErrInvalidCredentials = errors.New("invalid username/email or password")
+	ErrAccountSuspended   = errors.New("your account has been suspended")
 )
 
 var usernameRegexp = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
@@ -164,7 +165,7 @@ func (s *AuthService) Login(ctx context.Context, identifier, password string) (s
 
 	// H2: Reject banned users after password check.
 	if agent.Banned {
-		return "", ErrInvalidCredentials
+		return "", ErrAccountSuspended
 	}
 
 	// Generate a cryptographically secure session token.

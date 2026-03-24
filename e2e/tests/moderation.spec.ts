@@ -47,15 +47,11 @@ test.describe("Flagging", () => {
     const postID = postIDFromURL(page.url());
     expect(postID).toBeTruthy();
 
-    // Flag the post via direct POST request (flag button may not be in UI yet).
-    const csrfToken = await getCSRFToken(page);
-    const response = await page.request.post(`/post/${postID}/flag`, {
-      form: { csrf_token: csrfToken },
-    });
+    // Click the flag button in the post UI.
+    await page.locator(`form[action="/post/${postID}/flag"] button.flag-btn`).click();
 
-    // Should redirect back to the post page (303).
-    expect(response.status()).toBe(200); // after redirect
-    expect(response.url()).toContain(`/post/${postID}`);
+    // Should stay on the post page after flagging.
+    await expect(page).toHaveURL(new RegExp(`/post/${postID}`));
 
     // Verify the flag was recorded: promote agent to admin and check moderation page.
     promoteToAdmin(agent.username);
@@ -93,12 +89,12 @@ test.describe("Flagging", () => {
     const commentID = href?.match(/\/comment\/(\d+)/)?.[1];
     expect(commentID).toBeTruthy();
 
-    // Flag the comment via direct POST request.
-    const csrfToken = await getCSRFToken(page);
-    const response = await page.request.post(`/comment/${commentID}/flag`, {
-      form: { csrf_token: csrfToken, post_id: postID },
-    });
-    expect(response.status()).toBe(200); // after redirect
+    // Click the flag button next to the comment in the UI.
+    const commentDiv = page.locator(`#comment-${commentID}`);
+    await commentDiv.locator(`form[action="/comment/${commentID}/flag"] button.flag-btn`).click();
+
+    // Should stay on the post page after flagging.
+    await expect(page).toHaveURL(new RegExp(`/post/${postID}`));
 
     // Verify via admin moderation page.
     promoteToAdmin(agent.username);
@@ -121,13 +117,19 @@ test.describe("Flagging", () => {
     // Log out.
     await page.locator('form[action="/logout"] button[type="submit"]').click();
 
-    // Try to flag the post — should redirect to login.
+    // Visit the post page — the flag button should NOT be visible for unauthenticated users.
+    await page.goto(`/post/${postID}`);
+    await expect(
+      page.locator(`form[action="/post/${postID}/flag"] button.flag-btn`),
+    ).toHaveCount(0);
+
+    // A direct POST without a valid CSRF token is rejected (403 Forbidden).
     const response = await page.request.post(`/post/${postID}/flag`, {
       form: {},
       maxRedirects: 0,
     });
-    expect(response.status()).toBe(303);
-    expect(response.headers()["location"]).toContain("/login");
+    // CSRF middleware blocks the request before auth check, returning 403.
+    expect(response.status()).toBe(403);
   });
 });
 
@@ -171,11 +173,8 @@ test.describe("Admin hide/unhide post", () => {
     });
     const postID = postIDFromURL(page.url());
 
-    // Flag the post so it shows up on the moderation page.
-    const csrfToken = await getCSRFToken(page);
-    await page.request.post(`/post/${postID}/flag`, {
-      form: { csrf_token: csrfToken },
-    });
+    // Flag the post via the UI flag button so it shows up on the moderation page.
+    await page.locator(`form[action="/post/${postID}/flag"] button.flag-btn`).click();
 
     // Promote user to admin and re-login.
     promoteToAdmin(user.username);
@@ -218,10 +217,8 @@ test.describe("Admin hide/unhide post", () => {
     });
     const postID = postIDFromURL(page.url());
 
-    const csrfToken = await getCSRFToken(page);
-    await page.request.post(`/post/${postID}/flag`, {
-      form: { csrf_token: csrfToken },
-    });
+    // Flag the post via the UI flag button.
+    await page.locator(`form[action="/post/${postID}/flag"] button.flag-btn`).click();
 
     // Promote to admin and re-login.
     promoteToAdmin(user.username);
@@ -268,11 +265,8 @@ test.describe("Admin ban/unban agent", () => {
     });
     const postID = postIDFromURL(page.url());
 
-    // Flag the post so it appears on moderation page.
-    const csrfToken = await getCSRFToken(page);
-    await page.request.post(`/post/${postID}/flag`, {
-      form: { csrf_token: csrfToken },
-    });
+    // Flag the post via the UI flag button so it appears on moderation page.
+    await page.locator(`form[action="/post/${postID}/flag"] button.flag-btn`).click();
 
     // Log out victim.
     await page.locator('form[action="/logout"] button[type="submit"]').click();
@@ -301,15 +295,15 @@ test.describe("Admin ban/unban agent", () => {
     // Log out the admin.
     await page.locator('form[action="/logout"] button[type="submit"]').click();
 
-    // Try to log in as the banned agent — should fail.
+    // Try to log in as the banned agent — should fail with suspended message.
     await page.goto("/login");
     await page.locator('input[name="identifier"]').fill(victim.username);
     await page.locator('input[name="password"]').fill(victim.password);
     await page.locator('button[type="submit"]').click();
 
-    // Should stay on login page with an error.
+    // Should stay on login page with a suspension error.
     await expect(page.locator("body")).toContainText(
-      /invalid|incorrect|wrong/i,
+      "Your account has been suspended",
     );
   });
 
@@ -324,11 +318,8 @@ test.describe("Admin ban/unban agent", () => {
     });
     const postID = postIDFromURL(page.url());
 
-    // Flag the post.
-    const csrfToken = await getCSRFToken(page);
-    await page.request.post(`/post/${postID}/flag`, {
-      form: { csrf_token: csrfToken },
-    });
+    // Flag the post via the UI flag button.
+    await page.locator(`form[action="/post/${postID}/flag"] button.flag-btn`).click();
 
     // Log out victim.
     await page.locator('form[action="/logout"] button[type="submit"]').click();
@@ -366,7 +357,7 @@ test.describe("Admin ban/unban agent", () => {
     // The victim should be able to log in again.
     await loginAgent(page, victim);
     await expect(
-      page.locator(`a[href="/agent/${victim.username}"]`),
+      page.locator(`nav a[href="/agent/${victim.username}"]`),
     ).toBeVisible();
   });
 });
@@ -383,10 +374,8 @@ test.describe("Moderation log", () => {
     });
     const postID = postIDFromURL(page.url());
 
-    const csrfToken = await getCSRFToken(page);
-    await page.request.post(`/post/${postID}/flag`, {
-      form: { csrf_token: csrfToken },
-    });
+    // Flag the post via the UI flag button.
+    await page.locator(`form[action="/post/${postID}/flag"] button.flag-btn`).click();
 
     promoteToAdmin(user.username);
     await page.locator('form[action="/logout"] button[type="submit"]').click();

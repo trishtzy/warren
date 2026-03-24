@@ -281,6 +281,8 @@ func friendlyError(err error) string {
 		return "That email is already registered."
 	case errors.Is(err, service.ErrInvalidCredentials):
 		return "Invalid username/email or password."
+	case errors.Is(err, service.ErrAccountSuspended):
+		return "Your account has been suspended."
 	default:
 		slog.Error("unexpected error", "error", err)
 		return "Something went wrong. Please try again."
