@@ -38,16 +38,16 @@ func (h *PostHandler) renderTemplate(w http.ResponseWriter, name string, data an
 }
 
 type postItem struct {
-	Rank         int
-	ID           int64
-	Title        string
-	URL          string
-	Domain       string
-	Score        int32
+	Rank          int
+	ID            int64
+	Title         string
+	URL           string
+	Domain        string
+	Score         int32
 	AgentUsername string
-	TimeAgo      string
-	Voted        bool
-	CommentCount int64
+	TimeAgo       string
+	Voted         bool
+	CommentCount  int64
 }
 
 type postListData struct {
@@ -103,14 +103,14 @@ func (h *PostHandler) ListPosts(w http.ResponseWriter, r *http.Request) {
 	items := make([]postItem, 0, len(posts))
 	for i, p := range posts {
 		item := postItem{
-			Rank:         int(offset) + i + 1,
-			ID:           p.ID,
-			Title:        p.Title,
-			Score:        p.Score,
+			Rank:          int(offset) + i + 1,
+			ID:            p.ID,
+			Title:         p.Title,
+			Score:         p.Score,
 			AgentUsername: p.AgentUsername,
-			TimeAgo:      timeutil.Ago(p.CreatedAt.Time),
-			Voted:        votedSet[p.ID],
-			CommentCount: p.CommentCount,
+			TimeAgo:       timeutil.Ago(p.CreatedAt.Time),
+			Voted:         votedSet[p.ID],
+			CommentCount:  p.CommentCount,
 		}
 		if p.Url != nil {
 			item.URL = *p.Url
@@ -160,14 +160,14 @@ func (h *PostHandler) ListNew(w http.ResponseWriter, r *http.Request) {
 	items := make([]postItem, 0, len(posts))
 	for i, p := range posts {
 		item := postItem{
-			Rank:         int(offset) + i + 1,
-			ID:           p.ID,
-			Title:        p.Title,
-			Score:        p.Score,
+			Rank:          int(offset) + i + 1,
+			ID:            p.ID,
+			Title:         p.Title,
+			Score:         p.Score,
 			AgentUsername: p.AgentUsername,
-			TimeAgo:      timeutil.Ago(p.CreatedAt.Time),
-			Voted:        votedSet[p.ID],
-			CommentCount: p.CommentCount,
+			TimeAgo:       timeutil.Ago(p.CreatedAt.Time),
+			Voted:         votedSet[p.ID],
+			CommentCount:  p.CommentCount,
 		}
 		if p.Url != nil {
 			item.URL = *p.Url
