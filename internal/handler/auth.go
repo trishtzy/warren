@@ -16,15 +16,19 @@ import (
 
 const sessionCookieMaxAge = 30 * 24 * 3600 // 30 days in seconds
 
+// Templates maps page names (e.g. "home.html") to independently parsed templates.
+// Each template includes its own copy of the layout, avoiding "content" block collisions.
+type Templates map[string]*template.Template
+
 // AuthHandler handles HTTP requests for registration, login, logout, and profiles.
 type AuthHandler struct {
 	svc     *service.AuthService
 	queries *db.Queries
-	tmpl    *template.Template
+	tmpl    Templates
 }
 
 // NewAuthHandler creates a new AuthHandler.
-func NewAuthHandler(svc *service.AuthService, queries *db.Queries, tmpl *template.Template) *AuthHandler {
+func NewAuthHandler(svc *service.AuthService, queries *db.Queries, tmpl Templates) *AuthHandler {
 	return &AuthHandler{svc: svc, queries: queries, tmpl: tmpl}
 }
 
@@ -47,10 +51,17 @@ func (h *AuthHandler) renderTemplate(w http.ResponseWriter, name string, data an
 	executeTemplate(h.tmpl, w, name, data)
 }
 
-// executeTemplate is the shared implementation for rendering templates to a response.
-func executeTemplate(tmpl *template.Template, w http.ResponseWriter, name string, data any) {
+// executeTemplate looks up the independently-parsed page template by name,
+// then executes it (which invokes the layout and content blocks).
+func executeTemplate(tmpl Templates, w http.ResponseWriter, name string, data any) {
+	t, ok := tmpl[name]
+	if !ok {
+		log.Printf("template not found: %s", name)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
 	var buf bytes.Buffer
-	if err := tmpl.ExecuteTemplate(&buf, name, data); err != nil {
+	if err := t.ExecuteTemplate(&buf, name, data); err != nil {
 		log.Printf("template error: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return

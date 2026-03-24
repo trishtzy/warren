@@ -3,7 +3,6 @@ package handler
 import (
 	"errors"
 	"fmt"
-	"html/template"
 	"log"
 	"net/http"
 	"net/url"
@@ -22,11 +21,11 @@ import (
 type PostHandler struct {
 	svc     *service.PostService
 	queries *db.Queries
-	tmpl    *template.Template
+	tmpl    Templates
 }
 
 // NewPostHandler creates a new PostHandler.
-func NewPostHandler(svc *service.PostService, queries *db.Queries, tmpl *template.Template) *PostHandler {
+func NewPostHandler(svc *service.PostService, queries *db.Queries, tmpl Templates) *PostHandler {
 	return &PostHandler{svc: svc, queries: queries, tmpl: tmpl}
 }
 
@@ -105,12 +104,16 @@ func (h *PostHandler) ShowSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 	data := struct {
 		pageData
-		Error   string
-		Warning string
-		Title   string
-		URL     string
-		Body    string
-		Force   bool
+		Error      string
+		Warning    string
+		Title      string
+		URL        string
+		Body       string
+		Force      bool
+		Duplicates []struct {
+			ID    int64
+			Title string
+		}
 	}{
 		pageData: newPageData(r),
 	}

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -47,9 +48,24 @@ func main() {
 	postStore := service.NewPgPostStore(queries, pool)
 	postService := service.NewPostService(postStore)
 
-	tmpl, err := template.ParseGlob("templates/*.html")
+	// Parse each page template individually with the layout to avoid
+	// "content" block collisions from ParseGlob merging all definitions.
+	tmpl := make(handler.Templates)
+	layoutFile := "templates/layout.html"
+	pages, err := filepath.Glob("templates/*.html")
 	if err != nil {
-		log.Fatalf("unable to parse templates: %v", err)
+		log.Fatalf("unable to glob templates: %v", err)
+	}
+	for _, page := range pages {
+		if page == layoutFile {
+			continue
+		}
+		name := filepath.Base(page)
+		t, err := template.ParseFiles(layoutFile, page)
+		if err != nil {
+			log.Fatalf("unable to parse template %s: %v", name, err)
+		}
+		tmpl[name] = t
 	}
 
 	authHandler := handler.NewAuthHandler(authService, queries, tmpl)
