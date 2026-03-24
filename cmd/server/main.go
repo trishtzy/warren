@@ -9,11 +9,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/caarlos0/env/v11"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -27,6 +27,13 @@ import (
 	"github.com/trishtzy/warren/templates"
 )
 
+type config struct {
+	Port           string  `env:"PORT"            envDefault:"8080"`
+	DatabaseURL    string  `env:"DATABASE_URL"    envDefault:"postgresql://rabbithole:rabbithole@127.0.0.1:5433/rabbithole?sslmode=disable"`
+	RankingGravity float64 `env:"RANKING_GRAVITY" envDefault:"1.5"`
+	SecureCookies  bool    `env:"SECURE_COOKIES"  envDefault:"true"`
+}
+
 func fatal(msg string, args ...any) {
 	slog.Error(msg, args...)
 	os.Exit(1)
@@ -35,20 +42,19 @@ func fatal(msg string, args ...any) {
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	cfg, err := env.ParseAs[config]()
+	if err != nil {
+		fatal("unable to parse config", "error", err)
 	}
 
-	databaseURL := os.Getenv("DATABASE_URL")
-	if databaseURL == "" {
-		databaseURL = "postgresql://rabbithole:rabbithole@127.0.0.1:5433/rabbithole?sslmode=disable"
+	if !cfg.SecureCookies {
+		slog.Warn("secure cookies disabled — do not use in production")
 	}
 
 	ctx := context.Background()
 
 	// Run goose migrations before opening the connection pool.
-	sqlDB, err := sql.Open("pgx", databaseURL)
+	sqlDB, err := sql.Open("pgx", cfg.DatabaseURL)
 	if err != nil {
 		fatal("unable to open database for migrations", "error", err)
 	}
@@ -68,7 +74,7 @@ func main() {
 	}
 	slog.Info("migrations applied", "version", version)
 
-	pool, err := pgxpool.New(ctx, databaseURL)
+	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
 		fatal("unable to connect to database", "error", err)
 	}
@@ -115,21 +121,12 @@ func main() {
 		tmpl[name] = t
 	}
 
-	gravity := ranking.DefaultGravity
-	if v := os.Getenv("RANKING_GRAVITY"); v != "" {
-		if g, err := strconv.ParseFloat(v, 64); err == nil && g > 0 {
-			gravity = g
-		}
+	gravity := cfg.RankingGravity
+	if gravity <= 0 {
+		gravity = ranking.DefaultGravity
 	}
 
-	// SECURE_COOKIES defaults to true. Set to "false" for local dev over plain HTTP.
-	secureCookies := true
-	if v := os.Getenv("SECURE_COOKIES"); strings.EqualFold(v, "false") || v == "0" {
-		secureCookies = false
-		slog.Warn("secure cookies disabled — do not use in production")
-	}
-
-	authHandler := handler.NewAuthHandler(authService, queries, tmpl, secureCookies)
+	authHandler := handler.NewAuthHandler(authService, queries, tmpl, cfg.SecureCookies)
 	postHandler := handler.NewPostHandler(postService, commentService, queries, tmpl, gravity)
 	commentHandler := handler.NewCommentHandler(commentService, queries, tmpl)
 
@@ -140,9 +137,9 @@ func main() {
 
 	// Wrap the entire mux with middleware.
 	// CSRF runs first (outermost), then Auth injects agent info.
-	wrappedMux := middleware.CSRF(secureCookies)(middleware.Auth(queries)(mux))
+	wrappedMux := middleware.CSRF(cfg.SecureCookies)(middleware.Auth(queries)(mux))
 
-	addr := ":" + port
+	addr := ":" + cfg.Port
 	server := &http.Server{
 		Addr:         addr,
 		Handler:      wrappedMux,
