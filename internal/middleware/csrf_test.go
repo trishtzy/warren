@@ -15,7 +15,7 @@ var dummyHandler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request)
 })
 
 func TestCSRF_SetsCookieOnGET(t *testing.T) {
-	handler := CSRF(dummyHandler)
+	handler := CSRF(true)(dummyHandler)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 
@@ -53,7 +53,7 @@ func TestCSRF_InjectsTokenInContext(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := CSRF(inner)
+	handler := CSRF(true)(inner)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 
@@ -69,7 +69,7 @@ func TestCSRF_InjectsTokenInContext(t *testing.T) {
 }
 
 func TestCSRF_POST_ValidToken(t *testing.T) {
-	handler := CSRF(dummyHandler)
+	handler := CSRF(true)(dummyHandler)
 
 	// Step 1: GET to obtain cookie and masked token.
 	var maskedToken string
@@ -77,7 +77,7 @@ func TestCSRF_POST_ValidToken(t *testing.T) {
 		maskedToken = CSRFToken(r)
 		w.WriteHeader(http.StatusOK)
 	})
-	getHandler := CSRF(inner)
+	getHandler := CSRF(true)(inner)
 	getReq := httptest.NewRequest(http.MethodGet, "/", nil)
 	getRec := httptest.NewRecorder()
 	getHandler.ServeHTTP(getRec, getReq)
@@ -108,7 +108,7 @@ func TestCSRF_POST_ValidToken(t *testing.T) {
 }
 
 func TestCSRF_POST_MissingToken(t *testing.T) {
-	handler := CSRF(dummyHandler)
+	handler := CSRF(true)(dummyHandler)
 
 	// GET to obtain cookie.
 	getReq := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -136,7 +136,7 @@ func TestCSRF_POST_MissingToken(t *testing.T) {
 }
 
 func TestCSRF_POST_InvalidToken(t *testing.T) {
-	handler := CSRF(dummyHandler)
+	handler := CSRF(true)(dummyHandler)
 
 	// GET to obtain cookie.
 	getReq := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -166,7 +166,7 @@ func TestCSRF_POST_InvalidToken(t *testing.T) {
 }
 
 func TestCSRF_POST_WrongToken(t *testing.T) {
-	handler := CSRF(dummyHandler)
+	handler := CSRF(true)(dummyHandler)
 
 	// GET to obtain cookie.
 	getReq := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -205,7 +205,7 @@ func TestCSRF_POST_WrongToken(t *testing.T) {
 }
 
 func TestCSRF_POST_NoCookie(t *testing.T) {
-	handler := CSRF(dummyHandler)
+	handler := CSRF(true)(dummyHandler)
 
 	// POST with a form token but no cookie — the middleware will generate a
 	// new cookie, but the form token won't match the fresh cookie.
@@ -223,7 +223,7 @@ func TestCSRF_POST_NoCookie(t *testing.T) {
 }
 
 func TestCSRF_GET_DoesNotValidate(t *testing.T) {
-	handler := CSRF(dummyHandler)
+	handler := CSRF(true)(dummyHandler)
 
 	// GET request should pass even without any token.
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -288,7 +288,7 @@ func TestMaskProducesDifferentValues(t *testing.T) {
 }
 
 func TestCSRF_ReusesCookieOnSubsequentGET(t *testing.T) {
-	handler := CSRF(dummyHandler)
+	handler := CSRF(true)(dummyHandler)
 
 	// First GET — sets cookie.
 	req1 := httptest.NewRequest(http.MethodGet, "/", nil)

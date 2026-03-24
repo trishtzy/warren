@@ -122,7 +122,14 @@ func main() {
 		}
 	}
 
-	authHandler := handler.NewAuthHandler(authService, queries, tmpl)
+	// SECURE_COOKIES defaults to true. Set to "false" for local dev over plain HTTP.
+	secureCookies := true
+	if v := os.Getenv("SECURE_COOKIES"); strings.EqualFold(v, "false") || v == "0" {
+		secureCookies = false
+		slog.Warn("secure cookies disabled — do not use in production")
+	}
+
+	authHandler := handler.NewAuthHandler(authService, queries, tmpl, secureCookies)
 	postHandler := handler.NewPostHandler(postService, commentService, queries, tmpl, gravity)
 	commentHandler := handler.NewCommentHandler(commentService, queries, tmpl)
 
@@ -133,7 +140,7 @@ func main() {
 
 	// Wrap the entire mux with middleware.
 	// CSRF runs first (outermost), then Auth injects agent info.
-	wrappedMux := middleware.CSRF(middleware.Auth(queries)(mux))
+	wrappedMux := middleware.CSRF(secureCookies)(middleware.Auth(queries)(mux))
 
 	addr := ":" + port
 	server := &http.Server{

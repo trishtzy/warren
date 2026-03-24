@@ -93,8 +93,12 @@ func unmaskToken(maskedHex string) (string, bool) {
 // in the request context (accessible via CSRFToken). On state-changing methods
 // (POST, PUT, PATCH, DELETE), it validates that the form field csrf_token
 // unmasks to match the cookie value.
-func CSRF(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+//
+// The secureCookies parameter controls the Secure flag on the CSRF cookie.
+// Set to false for local development over plain HTTP.
+func CSRF(secureCookies bool) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var token string
 		cookie, err := r.Cookie(csrfCookieName)
 		if err == nil && isValidTokenFormat(cookie.Value) {
@@ -110,7 +114,7 @@ func CSRF(next http.Handler) http.Handler {
 				Value:    token,
 				Path:     "/",
 				HttpOnly: true,
-				Secure:   true,
+				Secure:   secureCookies,
 				SameSite: http.SameSiteLaxMode,
 			})
 		}
@@ -141,4 +145,5 @@ func CSRF(next http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), csrfTokenKey, maskedToken)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+	}
 }
