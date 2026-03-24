@@ -108,67 +108,79 @@ func (s *ModerationService) FlagContent(ctx context.Context, agentID int64, targ
 }
 
 // HidePost hides a post and logs the action.
+// Both writes run inside a single transaction to ensure atomicity.
 func (s *ModerationService) HidePost(ctx context.Context, adminID, postID int64, reason *string) error {
-	if err := s.store.UpdatePostHidden(ctx, db.UpdatePostHiddenParams{ID: postID, Hidden: true}); err != nil {
-		return fmt.Errorf("hiding post: %w", err)
-	}
-	if _, err := s.store.CreateModerationLog(ctx, db.CreateModerationLogParams{
-		AdminID:  adminID,
-		Action:   db.ModerationActionHidePost,
-		TargetID: postID,
-		Reason:   reason,
-	}); err != nil {
-		return fmt.Errorf("logging hide post: %w", err)
-	}
-	return nil
+	return s.store.ExecTx(ctx, func(q ModerationQuerier) error {
+		if err := q.UpdatePostHidden(ctx, db.UpdatePostHiddenParams{ID: postID, Hidden: true}); err != nil {
+			return fmt.Errorf("hiding post: %w", err)
+		}
+		if _, err := q.CreateModerationLog(ctx, db.CreateModerationLogParams{
+			AdminID:  adminID,
+			Action:   db.ModerationActionHidePost,
+			TargetID: postID,
+			Reason:   reason,
+		}); err != nil {
+			return fmt.Errorf("logging hide post: %w", err)
+		}
+		return nil
+	})
 }
 
 // UnhidePost unhides a post and logs the action.
+// Both writes run inside a single transaction to ensure atomicity.
 func (s *ModerationService) UnhidePost(ctx context.Context, adminID, postID int64, reason *string) error {
-	if err := s.store.UpdatePostHidden(ctx, db.UpdatePostHiddenParams{ID: postID, Hidden: false}); err != nil {
-		return fmt.Errorf("unhiding post: %w", err)
-	}
-	if _, err := s.store.CreateModerationLog(ctx, db.CreateModerationLogParams{
-		AdminID:  adminID,
-		Action:   db.ModerationActionUnhidePost,
-		TargetID: postID,
-		Reason:   reason,
-	}); err != nil {
-		return fmt.Errorf("logging unhide post: %w", err)
-	}
-	return nil
+	return s.store.ExecTx(ctx, func(q ModerationQuerier) error {
+		if err := q.UpdatePostHidden(ctx, db.UpdatePostHiddenParams{ID: postID, Hidden: false}); err != nil {
+			return fmt.Errorf("unhiding post: %w", err)
+		}
+		if _, err := q.CreateModerationLog(ctx, db.CreateModerationLogParams{
+			AdminID:  adminID,
+			Action:   db.ModerationActionUnhidePost,
+			TargetID: postID,
+			Reason:   reason,
+		}); err != nil {
+			return fmt.Errorf("logging unhide post: %w", err)
+		}
+		return nil
+	})
 }
 
 // HideComment hides a comment and logs the action.
+// Both writes run inside a single transaction to ensure atomicity.
 func (s *ModerationService) HideComment(ctx context.Context, adminID, commentID int64, reason *string) error {
-	if err := s.store.UpdateCommentHidden(ctx, db.UpdateCommentHiddenParams{ID: commentID, Hidden: true}); err != nil {
-		return fmt.Errorf("hiding comment: %w", err)
-	}
-	if _, err := s.store.CreateModerationLog(ctx, db.CreateModerationLogParams{
-		AdminID:  adminID,
-		Action:   db.ModerationActionHideComment,
-		TargetID: commentID,
-		Reason:   reason,
-	}); err != nil {
-		return fmt.Errorf("logging hide comment: %w", err)
-	}
-	return nil
+	return s.store.ExecTx(ctx, func(q ModerationQuerier) error {
+		if err := q.UpdateCommentHidden(ctx, db.UpdateCommentHiddenParams{ID: commentID, Hidden: true}); err != nil {
+			return fmt.Errorf("hiding comment: %w", err)
+		}
+		if _, err := q.CreateModerationLog(ctx, db.CreateModerationLogParams{
+			AdminID:  adminID,
+			Action:   db.ModerationActionHideComment,
+			TargetID: commentID,
+			Reason:   reason,
+		}); err != nil {
+			return fmt.Errorf("logging hide comment: %w", err)
+		}
+		return nil
+	})
 }
 
 // UnhideComment unhides a comment and logs the action.
+// Both writes run inside a single transaction to ensure atomicity.
 func (s *ModerationService) UnhideComment(ctx context.Context, adminID, commentID int64, reason *string) error {
-	if err := s.store.UpdateCommentHidden(ctx, db.UpdateCommentHiddenParams{ID: commentID, Hidden: false}); err != nil {
-		return fmt.Errorf("unhiding comment: %w", err)
-	}
-	if _, err := s.store.CreateModerationLog(ctx, db.CreateModerationLogParams{
-		AdminID:  adminID,
-		Action:   db.ModerationActionUnhideComment,
-		TargetID: commentID,
-		Reason:   reason,
-	}); err != nil {
-		return fmt.Errorf("logging unhide comment: %w", err)
-	}
-	return nil
+	return s.store.ExecTx(ctx, func(q ModerationQuerier) error {
+		if err := q.UpdateCommentHidden(ctx, db.UpdateCommentHiddenParams{ID: commentID, Hidden: false}); err != nil {
+			return fmt.Errorf("unhiding comment: %w", err)
+		}
+		if _, err := q.CreateModerationLog(ctx, db.CreateModerationLogParams{
+			AdminID:  adminID,
+			Action:   db.ModerationActionUnhideComment,
+			TargetID: commentID,
+			Reason:   reason,
+		}); err != nil {
+			return fmt.Errorf("logging unhide comment: %w", err)
+		}
+		return nil
+	})
 }
 
 // BanAgent bans an agent, destroys their sessions, and logs the action.
@@ -210,19 +222,22 @@ func (s *ModerationService) BanAgent(ctx context.Context, adminID, targetAgentID
 }
 
 // UnbanAgent unbans an agent and logs the action.
+// Both writes run inside a single transaction to ensure atomicity.
 func (s *ModerationService) UnbanAgent(ctx context.Context, adminID, targetAgentID int64, reason *string) error {
-	if err := s.store.UpdateAgentBanned(ctx, db.UpdateAgentBannedParams{ID: targetAgentID, Banned: false}); err != nil {
-		return fmt.Errorf("unbanning agent: %w", err)
-	}
-	if _, err := s.store.CreateModerationLog(ctx, db.CreateModerationLogParams{
-		AdminID:  adminID,
-		Action:   db.ModerationActionUnbanAgent,
-		TargetID: targetAgentID,
-		Reason:   reason,
-	}); err != nil {
-		return fmt.Errorf("logging unban: %w", err)
-	}
-	return nil
+	return s.store.ExecTx(ctx, func(q ModerationQuerier) error {
+		if err := q.UpdateAgentBanned(ctx, db.UpdateAgentBannedParams{ID: targetAgentID, Banned: false}); err != nil {
+			return fmt.Errorf("unbanning agent: %w", err)
+		}
+		if _, err := q.CreateModerationLog(ctx, db.CreateModerationLogParams{
+			AdminID:  adminID,
+			Action:   db.ModerationActionUnbanAgent,
+			TargetID: targetAgentID,
+			Reason:   reason,
+		}); err != nil {
+			return fmt.Errorf("logging unban: %w", err)
+		}
+		return nil
+	})
 }
 
 // ListFlaggedPosts returns posts that have been flagged, ordered by flag count.

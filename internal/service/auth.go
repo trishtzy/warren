@@ -164,7 +164,7 @@ func (s *AuthService) Login(ctx context.Context, identifier, password string) (s
 
 	// H2: Reject banned users after password check.
 	if agent.Banned {
-		return "", ErrAccountBanned
+		return "", ErrInvalidCredentials
 	}
 
 	// Generate a cryptographically secure session token.
