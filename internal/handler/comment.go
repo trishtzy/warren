@@ -156,4 +156,3 @@ func (h *CommentHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /post/{id}/comment", h.DoComment)
 	mux.HandleFunc("GET /comment/{id}", h.ShowComment)
 }
-
