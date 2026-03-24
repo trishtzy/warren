@@ -104,12 +104,13 @@ func (h *PostHandler) ShowSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 	data := struct {
 		pageData
-		Error   string
-		Warning string
-		Title   string
-		URL     string
-		Body    string
-		Force   bool
+		Error      string
+		Warning    string
+		Title      string
+		URL        string
+		Body       string
+		Force      bool
+		Duplicates []struct{ ID int64; Title string }
 	}{
 		pageData: newPageData(r),
 	}
