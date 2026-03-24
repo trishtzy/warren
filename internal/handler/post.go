@@ -371,6 +371,7 @@ func (h *PostHandler) ShowPost(w http.ResponseWriter, r *http.Request) {
 		Post         postView
 		FlatComments []service.FlatComment
 		CommentCount int
+		CommentError string
 	}{
 		pageData:     newPageData(r),
 		Post:         pv,
