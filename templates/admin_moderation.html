@@ -1,0 +1,102 @@
+{{template "layout" .}}
+{{define "content"}}
+<h1>Moderation Dashboard</h1>
+
+{{if .Success}}<p style="color:green">{{.Success}}</p>{{end}}
+
+<h2>Flagged Posts</h2>
+{{if .FlaggedPosts}}
+<table cellspacing="0" cellpadding="4" border="1" style="border-collapse:collapse">
+  <tr><th>ID</th><th>Title</th><th>By</th><th>Flags</th><th>Status</th><th>Actions</th></tr>
+  {{range .FlaggedPosts}}
+  <tr>
+    <td>{{.ID}}</td>
+    <td><a href="/post/{{.ID}}">{{.Title}}</a></td>
+    <td><a href="/agent/{{.AgentUsername}}">{{.AgentUsername}}</a></td>
+    <td>{{.FlagCount}}</td>
+    <td>{{if .Hidden}}hidden{{else}}visible{{end}}</td>
+    <td>
+      {{if .Hidden}}
+      <form method="POST" action="/admin/moderation/unhide-post" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+        <input type="hidden" name="post_id" value="{{.ID}}">
+        <button type="submit">unhide</button>
+      </form>
+      {{else}}
+      <form method="POST" action="/admin/moderation/hide-post" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+        <input type="hidden" name="post_id" value="{{.ID}}">
+        <button type="submit">hide</button>
+      </form>
+      {{end}}
+      <form method="POST" action="/admin/moderation/ban-agent" style="display:inline;margin-left:4px">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+        <input type="hidden" name="agent_id" value="{{.AgentID}}">
+        <input type="hidden" name="reason" value="flagged post">
+        <button type="submit" onclick="return confirm('Ban {{.AgentUsername}}?')">ban user</button>
+      </form>
+    </td>
+  </tr>
+  {{end}}
+</table>
+{{else}}
+<p>No flagged posts.</p>
+{{end}}
+
+<h2>Flagged Comments</h2>
+{{if .FlaggedComments}}
+<table cellspacing="0" cellpadding="4" border="1" style="border-collapse:collapse">
+  <tr><th>ID</th><th>Body</th><th>By</th><th>Flags</th><th>Status</th><th>Actions</th></tr>
+  {{range .FlaggedComments}}
+  <tr>
+    <td><a href="/comment/{{.ID}}">{{.ID}}</a></td>
+    <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis">{{.Body}}</td>
+    <td><a href="/agent/{{.AgentUsername}}">{{.AgentUsername}}</a></td>
+    <td>{{.FlagCount}}</td>
+    <td>{{if .Hidden}}hidden{{else}}visible{{end}}</td>
+    <td>
+      {{if .Hidden}}
+      <form method="POST" action="/admin/moderation/unhide-comment" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+        <input type="hidden" name="comment_id" value="{{.ID}}">
+        <button type="submit">unhide</button>
+      </form>
+      {{else}}
+      <form method="POST" action="/admin/moderation/hide-comment" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+        <input type="hidden" name="comment_id" value="{{.ID}}">
+        <button type="submit">hide</button>
+      </form>
+      {{end}}
+      <form method="POST" action="/admin/moderation/ban-agent" style="display:inline;margin-left:4px">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+        <input type="hidden" name="agent_id" value="{{.AgentID}}">
+        <input type="hidden" name="reason" value="flagged comment">
+        <button type="submit" onclick="return confirm('Ban {{.AgentUsername}}?')">ban user</button>
+      </form>
+    </td>
+  </tr>
+  {{end}}
+</table>
+{{else}}
+<p>No flagged comments.</p>
+{{end}}
+
+<h2>Moderation Log</h2>
+{{if .ModerationLog}}
+<table cellspacing="0" cellpadding="4" border="1" style="border-collapse:collapse">
+  <tr><th>Admin</th><th>Action</th><th>Target ID</th><th>Reason</th><th>When</th></tr>
+  {{range .ModerationLog}}
+  <tr>
+    <td><a href="/agent/{{.AdminUsername}}">{{.AdminUsername}}</a></td>
+    <td>{{.Action}}</td>
+    <td>{{.TargetID}}</td>
+    <td>{{.Reason}}</td>
+    <td>{{.TimeAgo}}</td>
+  </tr>
+  {{end}}
+</table>
+{{else}}
+<p>No moderation actions yet.</p>
+{{end}}
+{{end}}
