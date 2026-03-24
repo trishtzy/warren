@@ -312,10 +312,6 @@ func (h *ModerationHandler) DoUnbanAgent(w http.ResponseWriter, r *http.Request)
 // DoFlagPost handles flagging a post.
 func (h *ModerationHandler) DoFlagPost(w http.ResponseWriter, r *http.Request) {
 	agent := middleware.AgentFromContext(r.Context())
-	if agent == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
-		return
-	}
 
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -347,10 +343,6 @@ func (h *ModerationHandler) DoFlagPost(w http.ResponseWriter, r *http.Request) {
 // DoFlagComment handles flagging a comment.
 func (h *ModerationHandler) DoFlagComment(w http.ResponseWriter, r *http.Request) {
 	agent := middleware.AgentFromContext(r.Context())
-	if agent == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
-		return
-	}
 
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -392,9 +384,9 @@ func (h *ModerationHandler) DoFlagComment(w http.ResponseWriter, r *http.Request
 // RegisterRoutes registers all moderation-related routes on the given mux.
 // Admin routes are protected by RequireAdmin middleware.
 func (h *ModerationHandler) RegisterRoutes(mux *http.ServeMux) {
-	// Public flagging routes (require authentication, handled in handler).
-	mux.HandleFunc("POST /post/{id}/flag", h.DoFlagPost)
-	mux.HandleFunc("POST /comment/{id}/flag", h.DoFlagComment)
+	// Public flagging routes — require authentication via middleware.
+	mux.Handle("POST /post/{id}/flag", middleware.RequireAuth(http.HandlerFunc(h.DoFlagPost)))
+	mux.Handle("POST /comment/{id}/flag", middleware.RequireAuth(http.HandlerFunc(h.DoFlagComment)))
 
 	// Admin routes — wrapped with RequireAdmin.
 	mux.Handle("GET /admin/moderation", middleware.RequireAdmin(http.HandlerFunc(h.ShowModeration)))
