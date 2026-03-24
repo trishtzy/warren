@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -20,6 +21,7 @@ import (
 	db "github.com/trishtzy/warren/db/generated"
 	"github.com/trishtzy/warren/internal/handler"
 	"github.com/trishtzy/warren/internal/middleware"
+	"github.com/trishtzy/warren/internal/ranking"
 	"github.com/trishtzy/warren/internal/service"
 	"github.com/trishtzy/warren/migrations"
 	"github.com/trishtzy/warren/templates"
@@ -113,8 +115,15 @@ func main() {
 		tmpl[name] = t
 	}
 
+	gravity := ranking.DefaultGravity
+	if v := os.Getenv("RANKING_GRAVITY"); v != "" {
+		if g, err := strconv.ParseFloat(v, 64); err == nil && g > 0 {
+			gravity = g
+		}
+	}
+
 	authHandler := handler.NewAuthHandler(authService, queries, tmpl)
-	postHandler := handler.NewPostHandler(postService, commentService, queries, tmpl)
+	postHandler := handler.NewPostHandler(postService, commentService, queries, tmpl, gravity)
 	commentHandler := handler.NewCommentHandler(commentService, queries, tmpl)
 
 	mux := http.NewServeMux()

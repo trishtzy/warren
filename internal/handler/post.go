@@ -17,28 +17,72 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+const postsPerPage = 30
+
 // PostHandler handles HTTP requests for post submission and viewing.
 type PostHandler struct {
 	svc        *service.PostService
 	commentSvc *service.CommentService
 	queries    *db.Queries
 	tmpl       Templates
+	gravity    float64
 }
 
 // NewPostHandler creates a new PostHandler.
-func NewPostHandler(svc *service.PostService, commentSvc *service.CommentService, queries *db.Queries, tmpl Templates) *PostHandler {
-	return &PostHandler{svc: svc, commentSvc: commentSvc, queries: queries, tmpl: tmpl}
+func NewPostHandler(svc *service.PostService, commentSvc *service.CommentService, queries *db.Queries, tmpl Templates, gravity float64) *PostHandler {
+	return &PostHandler{svc: svc, commentSvc: commentSvc, queries: queries, tmpl: tmpl, gravity: gravity}
 }
 
 func (h *PostHandler) renderTemplate(w http.ResponseWriter, name string, data any) {
 	executeTemplate(h.tmpl, w, name, data)
 }
 
-// ListPosts renders the home page with a list of recent posts.
+type postItem struct {
+	Rank         int
+	ID           int64
+	Title        string
+	URL          string
+	Domain       string
+	Score        int32
+	AgentUsername string
+	TimeAgo      string
+	Voted        bool
+	CommentCount int64
+}
+
+type postListData struct {
+	pageData
+	Posts    []postItem
+	BasePath string
+	Page     int
+	HasMore  bool
+	NextPage int
+}
+
+func parsePage(r *http.Request) int {
+	p, err := strconv.Atoi(r.URL.Query().Get("p"))
+	if err != nil || p < 1 {
+		return 1
+	}
+	return p
+}
+
+func (h *PostHandler) buildVotedSet(r *http.Request) (map[int64]bool, error) {
+	if agent := middleware.AgentFromContext(r.Context()); agent != nil {
+		return h.svc.VotedPostIDs(r.Context(), agent.AgentID)
+	}
+	return nil, nil
+}
+
+// ListPosts renders the home page with ranked posts.
 func (h *PostHandler) ListPosts(w http.ResponseWriter, r *http.Request) {
-	posts, err := h.queries.ListPostsByNew(r.Context(), db.ListPostsByNewParams{
-		RowLimit:  30,
-		RowOffset: 0,
+	page := parsePage(r)
+	offset := int32((page - 1) * postsPerPage)
+
+	posts, err := h.queries.ListPostsRanked(r.Context(), db.ListPostsRankedParams{
+		Gravity:   h.gravity,
+		RowLimit:  postsPerPage + 1,
+		RowOffset: offset,
 	})
 	if err != nil {
 		slog.Error("list posts error", "error", err)
@@ -46,37 +90,27 @@ func (h *PostHandler) ListPosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build voted-post-ID set for the current agent.
-	var votedSet map[int64]bool
-	if agent := middleware.AgentFromContext(r.Context()); agent != nil {
-		votedSet, err = h.svc.VotedPostIDs(r.Context(), agent.AgentID)
-		if err != nil {
-			slog.Error("voted post ids error", "error", err)
-			// Non-fatal: continue without vote indicators.
-			votedSet = nil
-		}
+	hasMore := len(posts) > postsPerPage
+	if hasMore {
+		posts = posts[:postsPerPage]
 	}
 
-	type postItem struct {
-		ID            int64
-		Title         string
-		URL           string
-		Domain        string
-		Score         int32
-		AgentUsername string
-		TimeAgo       string
-		Voted         bool
+	votedSet, err := h.buildVotedSet(r)
+	if err != nil {
+		slog.Error("voted post ids error", "error", err)
 	}
 
 	items := make([]postItem, 0, len(posts))
-	for _, p := range posts {
+	for i, p := range posts {
 		item := postItem{
-			ID:            p.ID,
-			Title:         p.Title,
-			Score:         p.Score,
+			Rank:         int(offset) + i + 1,
+			ID:           p.ID,
+			Title:        p.Title,
+			Score:        p.Score,
 			AgentUsername: p.AgentUsername,
-			TimeAgo:       timeutil.Ago(p.CreatedAt.Time),
-			Voted:         votedSet[p.ID],
+			TimeAgo:      timeutil.Ago(p.CreatedAt.Time),
+			Voted:        votedSet[p.ID],
+			CommentCount: p.CommentCount,
 		}
 		if p.Url != nil {
 			item.URL = *p.Url
@@ -87,12 +121,70 @@ func (h *PostHandler) ListPosts(w http.ResponseWriter, r *http.Request) {
 		items = append(items, item)
 	}
 
-	data := struct {
-		pageData
-		Posts []postItem
-	}{
+	data := postListData{
 		pageData: newPageData(r),
 		Posts:    items,
+		BasePath: "/",
+		Page:     page,
+		HasMore:  hasMore,
+		NextPage: page + 1,
+	}
+	h.renderTemplate(w, "home.html", data)
+}
+
+// ListNew renders the newest posts page.
+func (h *PostHandler) ListNew(w http.ResponseWriter, r *http.Request) {
+	page := parsePage(r)
+	offset := int32((page - 1) * postsPerPage)
+
+	posts, err := h.queries.ListPostsByNew(r.Context(), db.ListPostsByNewParams{
+		RowLimit:  postsPerPage + 1,
+		RowOffset: offset,
+	})
+	if err != nil {
+		slog.Error("list posts error", "error", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	hasMore := len(posts) > postsPerPage
+	if hasMore {
+		posts = posts[:postsPerPage]
+	}
+
+	votedSet, err := h.buildVotedSet(r)
+	if err != nil {
+		slog.Error("voted post ids error", "error", err)
+	}
+
+	items := make([]postItem, 0, len(posts))
+	for i, p := range posts {
+		item := postItem{
+			Rank:         int(offset) + i + 1,
+			ID:           p.ID,
+			Title:        p.Title,
+			Score:        p.Score,
+			AgentUsername: p.AgentUsername,
+			TimeAgo:      timeutil.Ago(p.CreatedAt.Time),
+			Voted:        votedSet[p.ID],
+			CommentCount: p.CommentCount,
+		}
+		if p.Url != nil {
+			item.URL = *p.Url
+		}
+		if p.Domain != nil {
+			item.Domain = *p.Domain
+		}
+		items = append(items, item)
+	}
+
+	data := postListData{
+		pageData: newPageData(r),
+		Posts:    items,
+		BasePath: "/new",
+		Page:     page,
+		HasMore:  hasMore,
+		NextPage: page + 1,
 	}
 	h.renderTemplate(w, "home.html", data)
 }
@@ -343,6 +435,7 @@ func (h *PostHandler) DoVote(w http.ResponseWriter, r *http.Request) {
 // RegisterRoutes registers all post-related routes on the given mux.
 func (h *PostHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /{$}", h.ListPosts)
+	mux.HandleFunc("GET /new", h.ListNew)
 	mux.HandleFunc("GET /submit", h.ShowSubmit)
 	mux.HandleFunc("POST /submit", h.DoSubmit)
 	mux.HandleFunc("GET /post/{id}", h.ShowPost)

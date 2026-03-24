@@ -32,6 +32,7 @@ type PostQuerier interface {
 	GetPostByID(ctx context.Context, id int64) (db.GetPostByIDRow, error)
 	GetPostsByURL(ctx context.Context, url *string) ([]db.GetPostsByURLRow, error)
 	ListPostsByNew(ctx context.Context, arg db.ListPostsByNewParams) ([]db.ListPostsByNewRow, error)
+	ListPostsRanked(ctx context.Context, arg db.ListPostsRankedParams) ([]db.ListPostsRankedRow, error)
 	CountPosts(ctx context.Context) (int64, error)
 	CreateVote(ctx context.Context, arg db.CreateVoteParams) (db.Vote, error)
 	DeleteVote(ctx context.Context, arg db.DeleteVoteParams) error
