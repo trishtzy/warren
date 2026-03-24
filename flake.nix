@@ -22,7 +22,7 @@
               pname = "warren";
               version = self.shortRev or self.dirtyShortRev or "dev";
               src = ./.;
-              vendorHash = "sha256-Xar3a7Oc8q4i5N7el4sZYi5HwaW+oLc/jZqFaCtTrDM=";
+              vendorHash = "sha256-ZZDIpaLwZFDYwYGrSZal+8kG0jgLjf71267IwagD2Bo=";
               subPackages = [ "cmd/server" ];
               ldflags = [ "-s" "-w" ];
               env.CGO_ENABLED = "0";
