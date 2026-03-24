@@ -38,7 +38,9 @@
             default = devenv.lib.mkShell {
               inherit inputs pkgs;
               modules = [
-                {
+                (let
+                  dbUrl = "postgresql://rabbithole:rabbithole@127.0.0.1:5433/rabbithole?sslmode=disable";
+                in {
                   languages.go = {
                     enable = true;
                   };
@@ -112,11 +114,11 @@
                     '';
 
                     migrate-up.exec = ''
-                      goose -dir migrations postgres "postgresql://rabbithole:rabbithole@127.0.0.1:5433/rabbithole?sslmode=disable" up
+                      goose -dir migrations postgres "${dbUrl}" up
                     '';
 
                     migrate-down.exec = ''
-                      goose -dir migrations postgres "postgresql://rabbithole:rabbithole@127.0.0.1:5433/rabbithole?sslmode=disable" down
+                      goose -dir migrations postgres "${dbUrl}" down
                     '';
 
                     generate.exec = ''
@@ -134,7 +136,7 @@
 
                   env = {
                     PORT = "8080";
-                    DATABASE_URL = "postgresql://rabbithole:rabbithole@127.0.0.1:5433/rabbithole?sslmode=disable";
+                    DATABASE_URL = dbUrl;
                     RANKING_GRAVITY = "1.5";
                     SECURE_COOKIES = "false";
                   };
@@ -151,7 +153,7 @@
                     echo ""
                     echo "Commands: build, dev, test, lint, fmt, migrate-up, migrate-down, generate, clean, e2e"
                   '';
-                }
+                })
               ];
             };
           });
