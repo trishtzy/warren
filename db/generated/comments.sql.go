@@ -90,6 +90,61 @@ func (q *Queries) GetCommentByID(ctx context.Context, id int64) (GetCommentByIDR
 	return i, err
 }
 
+const listAllCommentsByPost = `-- name: ListAllCommentsByPost :many
+SELECT c.id, c.agent_id, c.post_id, c.parent_comment_id, c.body, c.hidden, c.created_at,
+       a.username AS agent_username
+FROM comments c
+JOIN agents a ON a.id = c.agent_id
+WHERE c.post_id = $1 AND c.hidden = FALSE
+ORDER BY c.created_at ASC
+LIMIT $2
+`
+
+type ListAllCommentsByPostParams struct {
+	PostID      int64 `json:"post_id"`
+	MaxComments int32 `json:"max_comments"`
+}
+
+type ListAllCommentsByPostRow struct {
+	ID              int64              `json:"id"`
+	AgentID         int64              `json:"agent_id"`
+	PostID          int64              `json:"post_id"`
+	ParentCommentID *int64             `json:"parent_comment_id"`
+	Body            string             `json:"body"`
+	Hidden          bool               `json:"hidden"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	AgentUsername   string             `json:"agent_username"`
+}
+
+func (q *Queries) ListAllCommentsByPost(ctx context.Context, arg ListAllCommentsByPostParams) ([]ListAllCommentsByPostRow, error) {
+	rows, err := q.db.Query(ctx, listAllCommentsByPost, arg.PostID, arg.MaxComments)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAllCommentsByPostRow{}
+	for rows.Next() {
+		var i ListAllCommentsByPostRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AgentID,
+			&i.PostID,
+			&i.ParentCommentID,
+			&i.Body,
+			&i.Hidden,
+			&i.CreatedAt,
+			&i.AgentUsername,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCommentsByPost = `-- name: ListCommentsByPost :many
 SELECT c.id, c.agent_id, c.post_id, c.parent_comment_id, c.body, c.hidden, c.created_at,
        a.username AS agent_username

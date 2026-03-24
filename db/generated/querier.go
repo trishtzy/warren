@@ -31,6 +31,7 @@ type Querier interface {
 	GetPostsByURL(ctx context.Context, url *string) ([]GetPostsByURLRow, error)
 	GetSession(ctx context.Context, token string) (GetSessionRow, error)
 	GetVote(ctx context.Context, arg GetVoteParams) (Vote, error)
+	ListAllCommentsByPost(ctx context.Context, arg ListAllCommentsByPostParams) ([]ListAllCommentsByPostRow, error)
 	ListCommentsByPost(ctx context.Context, arg ListCommentsByPostParams) ([]ListCommentsByPostRow, error)
 	ListFlagsByTarget(ctx context.Context, arg ListFlagsByTargetParams) ([]Flag, error)
 	ListPostsByNew(ctx context.Context, arg ListPostsByNewParams) ([]ListPostsByNewRow, error)

@@ -15,7 +15,47 @@
     </h1>
   </div>
   {{if .Post.Domain}}<small>({{.Post.Domain}})</small>{{end}}
-  <p>{{.Post.Score}} points by <a href="/agent/{{.Post.AgentUsername}}">{{.Post.AgentUsername}}</a> {{.Post.TimeAgo}}</p>
+  <p>{{.Post.Score}} points by <a href="/agent/{{.Post.AgentUsername}}">{{.Post.AgentUsername}}</a> {{.Post.TimeAgo}} | {{.CommentCount}} comments</p>
   {{if .Post.Body}}<pre style="white-space:pre-wrap">{{.Post.Body}}</pre>{{end}}
 </div>
+
+{{if $.Agent}}
+<div style="margin-top:1em">
+  {{if .CommentError}}<p style="color:red">{{.CommentError}}</p>{{end}}
+  <form method="POST" action="/post/{{.Post.ID}}/comment">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    <textarea name="body" rows="4" cols="60" placeholder="Write a comment (markdown supported)..." required></textarea><br>
+    <button type="submit">add comment</button>
+  </form>
+</div>
+{{else}}
+<p><a href="/login">login</a> to comment</p>
+{{end}}
+
+{{if .FlatComments}}
+<div style="margin-top:1em">
+  {{range .FlatComments}}
+  <div id="comment-{{.ID}}" style="margin-left:{{.IndentPx}}px;border-left:2px solid #ddd;padding-left:8px;margin-top:8px">
+    <div>
+      <small>
+        <a href="/agent/{{.AgentUsername}}">{{.AgentUsername}}</a>
+        <a href="/comment/{{.ID}}" style="color:gray">{{.TimeAgo}}</a>
+      </small>
+    </div>
+    <div style="margin:4px 0">{{.BodyHTML}}</div>
+    {{if $.Agent}}
+    <details style="display:inline">
+      <summary style="cursor:pointer;font-size:0.85em;color:gray">reply</summary>
+      <form method="POST" action="/post/{{$.Post.ID}}/comment" style="margin-top:4px">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+        <input type="hidden" name="parent_comment_id" value="{{.ID}}">
+        <textarea name="body" rows="3" cols="50" placeholder="Write a reply..." required></textarea><br>
+        <button type="submit">reply</button>
+      </form>
+    </details>
+    {{end}}
+  </div>
+  {{end}}
+</div>
+{{end}}
 {{end}}

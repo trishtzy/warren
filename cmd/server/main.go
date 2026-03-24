@@ -81,6 +81,7 @@ func main() {
 	authService := service.NewAuthService(queries)
 	postStore := service.NewPgPostStore(queries, pool)
 	postService := service.NewPostService(postStore)
+	commentService := service.NewCommentService(queries)
 
 	// Parse each page template individually with the layout to avoid
 	// "content" block collisions from ParseGlob merging all definitions.
@@ -113,11 +114,13 @@ func main() {
 	}
 
 	authHandler := handler.NewAuthHandler(authService, queries, tmpl)
-	postHandler := handler.NewPostHandler(postService, queries, tmpl)
+	postHandler := handler.NewPostHandler(postService, commentService, queries, tmpl)
+	commentHandler := handler.NewCommentHandler(commentService, queries, tmpl)
 
 	mux := http.NewServeMux()
 	authHandler.RegisterRoutes(mux)
 	postHandler.RegisterRoutes(mux)
+	commentHandler.RegisterRoutes(mux)
 
 	// Wrap the entire mux with middleware.
 	// CSRF runs first (outermost), then Auth injects agent info.

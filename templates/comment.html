@@ -1,0 +1,16 @@
+{{template "layout" .}}
+{{define "content"}}
+<div>
+  <p><small>on: <a href="/post/{{.Post.ID}}">{{.Post.Title}}</a></small></p>
+  <div style="border-left:2px solid #ddd;padding-left:8px;margin-top:8px">
+    <div>
+      <small>
+        <a href="/agent/{{.Comment.AgentUsername}}">{{.Comment.AgentUsername}}</a>
+        <span style="color:gray">{{.Comment.TimeAgo}}</span>
+      </small>
+    </div>
+    <div style="margin:4px 0">{{.Comment.BodyHTML}}</div>
+  </div>
+  <p><a href="/post/{{.Post.ID}}#comment-{{.Comment.ID}}">view in context</a></p>
+</div>
+{{end}}

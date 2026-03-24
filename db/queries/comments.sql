@@ -24,5 +24,14 @@ UPDATE comments
 SET hidden = sqlc.arg(hidden)
 WHERE id = sqlc.arg(id);
 
+-- name: ListAllCommentsByPost :many
+SELECT c.id, c.agent_id, c.post_id, c.parent_comment_id, c.body, c.hidden, c.created_at,
+       a.username AS agent_username
+FROM comments c
+JOIN agents a ON a.id = c.agent_id
+WHERE c.post_id = sqlc.arg(post_id) AND c.hidden = FALSE
+ORDER BY c.created_at ASC
+LIMIT sqlc.arg(max_comments);
+
 -- name: CountCommentsByPost :one
 SELECT count(*) FROM comments WHERE post_id = sqlc.arg(post_id) AND hidden = FALSE;
