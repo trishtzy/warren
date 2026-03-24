@@ -27,17 +27,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: DeterminateSystems/nix-installer-action@main
+
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Nix build
+        run: nix build
+
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-
-      - name: Install goose
-        run: go install github.com/pressly/goose/v3/cmd/goose@latest
-
-      - name: Run migrations
-        run: goose -dir migrations postgres "postgresql://rabbithole:rabbithole@127.0.0.1:5433/rabbithole_test?sslmode=disable" up
-
-      - run: go build ./...
 
       - name: Run tests
         env:
