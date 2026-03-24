@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	db "github.com/trishtzy/warren/db/generated"
 )
 
@@ -31,20 +32,58 @@ type ModerationQuerier interface {
 	ListModerationLog(ctx context.Context, arg db.ListModerationLogParams) ([]db.ListModerationLogRow, error)
 }
 
+// ModerationStore extends ModerationQuerier with transaction support.
+type ModerationStore interface {
+	ModerationQuerier
+	// ExecTx runs fn within a database transaction, passing a transactional ModerationQuerier.
+	// The transaction is committed if fn returns nil, rolled back otherwise.
+	ExecTx(ctx context.Context, fn func(ModerationQuerier) error) error
+}
+
+// PgModerationStore wraps a db.Queries and pgx pool to implement ModerationStore.
+type PgModerationStore struct {
+	*db.Queries
+	pool interface {
+		Begin(ctx context.Context) (pgx.Tx, error)
+	}
+}
+
+// NewPgModerationStore creates a PgModerationStore from a pool.
+func NewPgModerationStore(queries *db.Queries, pool interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+}) *PgModerationStore {
+	return &PgModerationStore{Queries: queries, pool: pool}
+}
+
+// ExecTx begins a transaction, calls fn with a transactional Queries, and commits or rolls back.
+func (s *PgModerationStore) ExecTx(ctx context.Context, fn func(ModerationQuerier) error) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	qtx := s.WithTx(tx)
+	if err := fn(qtx); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 // ModerationService handles flagging, hiding, and banning.
 type ModerationService struct {
-	queries ModerationQuerier
+	store ModerationStore
 }
 
 // NewModerationService creates a new ModerationService.
-func NewModerationService(queries ModerationQuerier) *ModerationService {
-	return &ModerationService{queries: queries}
+func NewModerationService(store ModerationStore) *ModerationService {
+	return &ModerationService{store: store}
 }
 
 // FlagContent creates a flag on a post or comment.
 func (s *ModerationService) FlagContent(ctx context.Context, agentID int64, targetType db.FlagTargetType, targetID int64, reason *string) (db.Flag, error) {
 	// Check if already flagged.
-	flagged, err := s.queries.HasAgentFlagged(ctx, db.HasAgentFlaggedParams{
+	flagged, err := s.store.HasAgentFlagged(ctx, db.HasAgentFlaggedParams{
 		AgentID:    agentID,
 		TargetType: targetType,
 		TargetID:   targetID,
@@ -56,7 +95,7 @@ func (s *ModerationService) FlagContent(ctx context.Context, agentID int64, targ
 		return db.Flag{}, ErrAlreadyFlagged
 	}
 
-	flag, err := s.queries.CreateFlag(ctx, db.CreateFlagParams{
+	flag, err := s.store.CreateFlag(ctx, db.CreateFlagParams{
 		AgentID:    agentID,
 		TargetType: targetType,
 		TargetID:   targetID,
@@ -70,10 +109,10 @@ func (s *ModerationService) FlagContent(ctx context.Context, agentID int64, targ
 
 // HidePost hides a post and logs the action.
 func (s *ModerationService) HidePost(ctx context.Context, adminID, postID int64, reason *string) error {
-	if err := s.queries.UpdatePostHidden(ctx, db.UpdatePostHiddenParams{ID: postID, Hidden: true}); err != nil {
+	if err := s.store.UpdatePostHidden(ctx, db.UpdatePostHiddenParams{ID: postID, Hidden: true}); err != nil {
 		return fmt.Errorf("hiding post: %w", err)
 	}
-	if _, err := s.queries.CreateModerationLog(ctx, db.CreateModerationLogParams{
+	if _, err := s.store.CreateModerationLog(ctx, db.CreateModerationLogParams{
 		AdminID:  adminID,
 		Action:   db.ModerationActionHidePost,
 		TargetID: postID,
@@ -86,10 +125,10 @@ func (s *ModerationService) HidePost(ctx context.Context, adminID, postID int64,
 
 // UnhidePost unhides a post and logs the action.
 func (s *ModerationService) UnhidePost(ctx context.Context, adminID, postID int64, reason *string) error {
-	if err := s.queries.UpdatePostHidden(ctx, db.UpdatePostHiddenParams{ID: postID, Hidden: false}); err != nil {
+	if err := s.store.UpdatePostHidden(ctx, db.UpdatePostHiddenParams{ID: postID, Hidden: false}); err != nil {
 		return fmt.Errorf("unhiding post: %w", err)
 	}
-	if _, err := s.queries.CreateModerationLog(ctx, db.CreateModerationLogParams{
+	if _, err := s.store.CreateModerationLog(ctx, db.CreateModerationLogParams{
 		AdminID:  adminID,
 		Action:   db.ModerationActionUnhidePost,
 		TargetID: postID,
@@ -102,10 +141,10 @@ func (s *ModerationService) UnhidePost(ctx context.Context, adminID, postID int6
 
 // HideComment hides a comment and logs the action.
 func (s *ModerationService) HideComment(ctx context.Context, adminID, commentID int64, reason *string) error {
-	if err := s.queries.UpdateCommentHidden(ctx, db.UpdateCommentHiddenParams{ID: commentID, Hidden: true}); err != nil {
+	if err := s.store.UpdateCommentHidden(ctx, db.UpdateCommentHiddenParams{ID: commentID, Hidden: true}); err != nil {
 		return fmt.Errorf("hiding comment: %w", err)
 	}
-	if _, err := s.queries.CreateModerationLog(ctx, db.CreateModerationLogParams{
+	if _, err := s.store.CreateModerationLog(ctx, db.CreateModerationLogParams{
 		AdminID:  adminID,
 		Action:   db.ModerationActionHideComment,
 		TargetID: commentID,
@@ -118,10 +157,10 @@ func (s *ModerationService) HideComment(ctx context.Context, adminID, commentID 
 
 // UnhideComment unhides a comment and logs the action.
 func (s *ModerationService) UnhideComment(ctx context.Context, adminID, commentID int64, reason *string) error {
-	if err := s.queries.UpdateCommentHidden(ctx, db.UpdateCommentHiddenParams{ID: commentID, Hidden: false}); err != nil {
+	if err := s.store.UpdateCommentHidden(ctx, db.UpdateCommentHiddenParams{ID: commentID, Hidden: false}); err != nil {
 		return fmt.Errorf("unhiding comment: %w", err)
 	}
-	if _, err := s.queries.CreateModerationLog(ctx, db.CreateModerationLogParams{
+	if _, err := s.store.CreateModerationLog(ctx, db.CreateModerationLogParams{
 		AdminID:  adminID,
 		Action:   db.ModerationActionUnhideComment,
 		TargetID: commentID,
@@ -133,13 +172,14 @@ func (s *ModerationService) UnhideComment(ctx context.Context, adminID, commentI
 }
 
 // BanAgent bans an agent, destroys their sessions, and logs the action.
+// All three writes run inside a single transaction to ensure atomicity.
 func (s *ModerationService) BanAgent(ctx context.Context, adminID, targetAgentID int64, reason *string) error {
 	if adminID == targetAgentID {
 		return ErrCannotBanSelf
 	}
 
-	// Check the target is not an admin.
-	target, err := s.queries.GetAgentByIDForAdmin(ctx, targetAgentID)
+	// Check the target is not an admin (read outside the tx is fine — it's a guard check).
+	target, err := s.store.GetAgentByIDForAdmin(ctx, targetAgentID)
 	if err != nil {
 		return fmt.Errorf("getting agent: %w", err)
 	}
@@ -147,32 +187,34 @@ func (s *ModerationService) BanAgent(ctx context.Context, adminID, targetAgentID
 		return ErrCannotBanAdmin
 	}
 
-	if err := s.queries.UpdateAgentBanned(ctx, db.UpdateAgentBannedParams{ID: targetAgentID, Banned: true}); err != nil {
-		return fmt.Errorf("banning agent: %w", err)
-	}
+	return s.store.ExecTx(ctx, func(q ModerationQuerier) error {
+		if err := q.UpdateAgentBanned(ctx, db.UpdateAgentBannedParams{ID: targetAgentID, Banned: true}); err != nil {
+			return fmt.Errorf("banning agent: %w", err)
+		}
 
-	// Destroy all sessions for the banned agent so they are logged out immediately.
-	if err := s.queries.DeleteSessionsByAgent(ctx, targetAgentID); err != nil {
-		return fmt.Errorf("deleting sessions: %w", err)
-	}
+		// Destroy all sessions for the banned agent so they are logged out immediately.
+		if err := q.DeleteSessionsByAgent(ctx, targetAgentID); err != nil {
+			return fmt.Errorf("deleting sessions: %w", err)
+		}
 
-	if _, err := s.queries.CreateModerationLog(ctx, db.CreateModerationLogParams{
-		AdminID:  adminID,
-		Action:   db.ModerationActionBanAgent,
-		TargetID: targetAgentID,
-		Reason:   reason,
-	}); err != nil {
-		return fmt.Errorf("logging ban: %w", err)
-	}
-	return nil
+		if _, err := q.CreateModerationLog(ctx, db.CreateModerationLogParams{
+			AdminID:  adminID,
+			Action:   db.ModerationActionBanAgent,
+			TargetID: targetAgentID,
+			Reason:   reason,
+		}); err != nil {
+			return fmt.Errorf("logging ban: %w", err)
+		}
+		return nil
+	})
 }
 
 // UnbanAgent unbans an agent and logs the action.
 func (s *ModerationService) UnbanAgent(ctx context.Context, adminID, targetAgentID int64, reason *string) error {
-	if err := s.queries.UpdateAgentBanned(ctx, db.UpdateAgentBannedParams{ID: targetAgentID, Banned: false}); err != nil {
+	if err := s.store.UpdateAgentBanned(ctx, db.UpdateAgentBannedParams{ID: targetAgentID, Banned: false}); err != nil {
 		return fmt.Errorf("unbanning agent: %w", err)
 	}
-	if _, err := s.queries.CreateModerationLog(ctx, db.CreateModerationLogParams{
+	if _, err := s.store.CreateModerationLog(ctx, db.CreateModerationLogParams{
 		AdminID:  adminID,
 		Action:   db.ModerationActionUnbanAgent,
 		TargetID: targetAgentID,
@@ -185,7 +227,7 @@ func (s *ModerationService) UnbanAgent(ctx context.Context, adminID, targetAgent
 
 // ListFlaggedPosts returns posts that have been flagged, ordered by flag count.
 func (s *ModerationService) ListFlaggedPosts(ctx context.Context, limit, offset int32) ([]db.ListFlaggedPostsRow, error) {
-	return s.queries.ListFlaggedPosts(ctx, db.ListFlaggedPostsParams{
+	return s.store.ListFlaggedPosts(ctx, db.ListFlaggedPostsParams{
 		RowLimit:  limit,
 		RowOffset: offset,
 	})
@@ -193,7 +235,7 @@ func (s *ModerationService) ListFlaggedPosts(ctx context.Context, limit, offset 
 
 // ListFlaggedComments returns comments that have been flagged, ordered by flag count.
 func (s *ModerationService) ListFlaggedComments(ctx context.Context, limit, offset int32) ([]db.ListFlaggedCommentsRow, error) {
-	return s.queries.ListFlaggedComments(ctx, db.ListFlaggedCommentsParams{
+	return s.store.ListFlaggedComments(ctx, db.ListFlaggedCommentsParams{
 		RowLimit:  limit,
 		RowOffset: offset,
 	})
@@ -201,7 +243,7 @@ func (s *ModerationService) ListFlaggedComments(ctx context.Context, limit, offs
 
 // ListModerationLog returns recent moderation actions.
 func (s *ModerationService) ListModerationLog(ctx context.Context, limit, offset int32) ([]db.ListModerationLogRow, error) {
-	return s.queries.ListModerationLog(ctx, db.ListModerationLogParams{
+	return s.store.ListModerationLog(ctx, db.ListModerationLogParams{
 		RowLimit:  limit,
 		RowOffset: offset,
 	})

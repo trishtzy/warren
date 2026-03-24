@@ -90,7 +90,8 @@ func main() {
 	postStore := service.NewPgPostStore(queries, pool)
 	postService := service.NewPostService(postStore)
 	commentService := service.NewCommentService(queries)
-	moderationService := service.NewModerationService(queries)
+	moderationStore := service.NewPgModerationStore(queries, pool)
+	moderationService := service.NewModerationService(moderationStore)
 
 	// Parse each page template individually with the layout to avoid
 	// "content" block collisions from ParseGlob merging all definitions.
