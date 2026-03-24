@@ -50,10 +50,14 @@ func main() {
 	if err := goose.Up(sqlDB, "."); err != nil {
 		log.Fatalf("goose migrations failed: %v", err)
 	}
+	version, err := goose.GetDBVersion(sqlDB)
+	if err != nil {
+		log.Fatalf("unable to get migration version: %v", err)
+	}
 	if err := sqlDB.Close(); err != nil {
 		log.Fatalf("unable to close migration db: %v", err)
 	}
-	log.Println("migrations applied")
+	log.Printf("migrations applied, current version: %d", version)
 
 	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
