@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"html/template"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -25,6 +25,11 @@ import (
 	"github.com/trishtzy/warren/templates"
 )
 
+func fatal(msg string, args ...any) {
+	slog.Error(msg, args...)
+	os.Exit(1)
+}
+
 func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -41,34 +46,34 @@ func main() {
 	// Run goose migrations before opening the connection pool.
 	sqlDB, err := sql.Open("pgx", databaseURL)
 	if err != nil {
-		log.Fatalf("unable to open database for migrations: %v", err)
+		fatal("unable to open database for migrations", "error", err)
 	}
 	goose.SetBaseFS(migrations.FS)
 	if err := goose.SetDialect("postgres"); err != nil {
-		log.Fatalf("goose set dialect: %v", err)
+		fatal("goose set dialect", "error", err)
 	}
 	if err := goose.Up(sqlDB, "."); err != nil {
-		log.Fatalf("goose migrations failed: %v", err)
+		fatal("goose migrations failed", "error", err)
 	}
 	version, err := goose.GetDBVersion(sqlDB)
 	if err != nil {
-		log.Fatalf("unable to get migration version: %v", err)
+		fatal("unable to get migration version", "error", err)
 	}
 	if err := sqlDB.Close(); err != nil {
-		log.Fatalf("unable to close migration db: %v", err)
+		fatal("unable to close migration db", "error", err)
 	}
-	log.Printf("migrations applied, current version: %d", version)
+	slog.Info("migrations applied", "version", version)
 
 	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
-		log.Fatalf("unable to connect to database: %v", err)
+		fatal("unable to connect to database", "error", err)
 	}
 	defer pool.Close()
 
 	if err := pool.Ping(ctx); err != nil {
-		log.Fatalf("unable to ping database: %v", err)
+		fatal("unable to ping database", "error", err)
 	}
-	log.Println("connected to database")
+	slog.Info("connected to database")
 
 	queries := db.New(pool)
 	authService := service.NewAuthService(queries)
@@ -80,11 +85,11 @@ func main() {
 	tmpl := make(handler.Templates)
 	layoutBytes, err := fs.ReadFile(templates.FS, "layout.html")
 	if err != nil {
-		log.Fatalf("unable to read layout template: %v", err)
+		fatal("unable to read layout template", "error", err)
 	}
 	entries, err := fs.ReadDir(templates.FS, ".")
 	if err != nil {
-		log.Fatalf("unable to read template dir: %v", err)
+		fatal("unable to read template dir", "error", err)
 	}
 	for _, entry := range entries {
 		name := entry.Name()
@@ -93,14 +98,14 @@ func main() {
 		}
 		pageBytes, err := fs.ReadFile(templates.FS, name)
 		if err != nil {
-			log.Fatalf("unable to read template %s: %v", name, err)
+			fatal("unable to read template", "name", name, "error", err)
 		}
 		t, err := template.New(name).Parse(string(layoutBytes))
 		if err != nil {
-			log.Fatalf("unable to parse layout for %s: %v", name, err)
+			fatal("unable to parse layout", "name", name, "error", err)
 		}
 		if _, err := t.Parse(string(pageBytes)); err != nil {
-			log.Fatalf("unable to parse template %s: %v", name, err)
+			fatal("unable to parse template", "name", name, "error", err)
 		}
 		tmpl[name] = t
 	}
@@ -130,20 +135,20 @@ func main() {
 	signal.Notify(done, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
-		log.Printf("listening on %s", addr)
+		slog.Info("listening", "addr", addr)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server error: %v", err)
+			fatal("server error", "error", err)
 		}
 	}()
 
 	<-done
-	log.Println("shutting down...")
+	slog.Info("shutting down")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Fatalf("shutdown error: %v", err)
+		fatal("shutdown error", "error", err)
 	}
-	log.Println("server stopped")
+	slog.Info("server stopped")
 }
