@@ -40,16 +40,14 @@ func setup(t *testing.T) (context.Context, *pgx.Conn, *db.Queries) {
 	if err != nil {
 		t.Skipf("skipping: cannot open test database: %v", err)
 	}
+	defer func() { _ = sqlDB.Close() }()
 	goose.SetBaseFS(migrations.FS)
 	if err := goose.SetDialect("postgres"); err != nil {
-		sqlDB.Close()
 		t.Fatalf("goose set dialect: %v", err)
 	}
 	if err := goose.Up(sqlDB, "."); err != nil {
-		sqlDB.Close()
 		t.Skipf("skipping: goose migrations failed: %v", err)
 	}
-	sqlDB.Close()
 
 	conn, err := pgx.Connect(ctx, dbURL)
 	if err != nil {
