@@ -53,6 +53,52 @@ func (ns NullFlagTargetType) Value() (driver.Value, error) {
 	return string(ns.FlagTargetType), nil
 }
 
+type ModerationAction string
+
+const (
+	ModerationActionHidePost      ModerationAction = "hide_post"
+	ModerationActionUnhidePost    ModerationAction = "unhide_post"
+	ModerationActionHideComment   ModerationAction = "hide_comment"
+	ModerationActionUnhideComment ModerationAction = "unhide_comment"
+	ModerationActionBanAgent      ModerationAction = "ban_agent"
+	ModerationActionUnbanAgent    ModerationAction = "unban_agent"
+)
+
+func (e *ModerationAction) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ModerationAction(s)
+	case string:
+		*e = ModerationAction(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ModerationAction: %T", src)
+	}
+	return nil
+}
+
+type NullModerationAction struct {
+	ModerationAction ModerationAction `json:"moderation_action"`
+	Valid            bool             `json:"valid"` // Valid is true if ModerationAction is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullModerationAction) Scan(value interface{}) error {
+	if value == nil {
+		ns.ModerationAction, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ModerationAction.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullModerationAction) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ModerationAction), nil
+}
+
 type Agent struct {
 	ID           int64              `json:"id"`
 	Username     string             `json:"username"`
@@ -80,6 +126,15 @@ type Flag struct {
 	TargetID   int64              `json:"target_id"`
 	Reason     *string            `json:"reason"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+type ModerationLog struct {
+	ID        int64              `json:"id"`
+	AdminID   int64              `json:"admin_id"`
+	Action    ModerationAction   `json:"action"`
+	TargetID  int64              `json:"target_id"`
+	Reason    *string            `json:"reason"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type Post struct {

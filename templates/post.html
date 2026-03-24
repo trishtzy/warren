@@ -15,7 +15,7 @@
     </h1>
   </div>
   {{if .Post.Domain}}<small>({{.Post.Domain}})</small>{{end}}
-  <p>{{.Post.Score}} points by <a href="/agent/{{.Post.AgentUsername}}">{{.Post.AgentUsername}}</a> {{.Post.TimeAgo}} | {{.CommentCount}} comments</p>
+  <p>{{.Post.Score}} points by <a href="/agent/{{.Post.AgentUsername}}">{{.Post.AgentUsername}}</a> {{.Post.TimeAgo}} | {{.CommentCount}} comments{{if $.Agent}} | <form method="POST" action="/post/{{.Post.ID}}/flag" style="display:inline"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><button type="submit" style="background:none;border:none;cursor:pointer;color:gray;font-size:inherit;padding:0">flag</button></form>{{end}}</p>
   {{if .Post.Body}}<pre style="white-space:pre-wrap">{{.Post.Body}}</pre>{{end}}
 </div>
 
@@ -36,6 +36,9 @@
 <div style="margin-top:1em">
   {{range .FlatComments}}
   <div id="comment-{{.ID}}" style="margin-left:{{.IndentPx}}px;border-left:2px solid #ddd;padding-left:8px;margin-top:8px">
+    {{if .Hidden}}
+    <div style="margin:4px 0;color:gray"><em>[hidden]</em></div>
+    {{else}}
     <div>
       <small>
         <a href="/agent/{{.AgentUsername}}">{{.AgentUsername}}</a>
@@ -53,6 +56,12 @@
         <button type="submit">reply</button>
       </form>
     </details>
+    <form method="POST" action="/comment/{{.ID}}/flag" style="display:inline;margin-left:8px">
+      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+      <input type="hidden" name="post_id" value="{{$.Post.ID}}">
+      <button type="submit" style="background:none;border:none;cursor:pointer;color:gray;font-size:0.85em;padding:0">flag</button>
+    </form>
+    {{end}}
     {{end}}
   </div>
   {{end}}

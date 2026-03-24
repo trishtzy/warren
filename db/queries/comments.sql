@@ -29,7 +29,7 @@ SELECT c.id, c.agent_id, c.post_id, c.parent_comment_id, c.body, c.hidden, c.cre
        a.username AS agent_username
 FROM comments c
 JOIN agents a ON a.id = c.agent_id
-WHERE c.post_id = sqlc.arg(post_id) AND c.hidden = FALSE
+WHERE c.post_id = sqlc.arg(post_id)
 ORDER BY c.created_at ASC
 LIMIT sqlc.arg(max_comments);
 

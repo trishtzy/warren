@@ -10,6 +10,7 @@
     <a href="/">rabbit hole</a> | <a href="/new">new</a>
     {{if .Agent}}
       | <a href="/submit">submit</a>
+      {{if .Agent.IsAdmin}}| <a href="/admin/moderation">admin</a>{{end}}
       | <a href="/agent/{{.Agent.Username}}">{{.Agent.Username}}</a>
       | <form method="POST" action="/logout" style="display:inline"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><button type="submit">logout</button></form>
     {{else}}

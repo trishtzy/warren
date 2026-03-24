@@ -88,6 +88,7 @@ type CommentTree struct {
 	ParentCommentID *int64
 	Body            string
 	BodyHTML        template.HTML
+	Hidden          bool
 	AgentUsername   string
 	TimeAgo         string
 	Depth           int
@@ -114,10 +115,16 @@ func (s *CommentService) BuildCommentTree(ctx context.Context, postID int64) ([]
 			AgentID:         r.AgentID,
 			PostID:          r.PostID,
 			ParentCommentID: r.ParentCommentID,
-			Body:            r.Body,
-			BodyHTML:        s.RenderMarkdown(r.Body),
+			Hidden:          r.Hidden,
 			AgentUsername:   r.AgentUsername,
 			TimeAgo:         timeutil.Ago(r.CreatedAt.Time),
+		}
+		if r.Hidden {
+			node.Body = "[hidden]"
+			node.BodyHTML = template.HTML("<em>[hidden]</em>")
+		} else {
+			node.Body = r.Body
+			node.BodyHTML = s.RenderMarkdown(r.Body)
 		}
 		nodeMap[r.ID] = node
 	}
@@ -179,6 +186,7 @@ type FlatComment struct {
 	AgentUsername string
 	TimeAgo       string
 	BodyHTML      template.HTML
+	Hidden        bool
 	IndentPx      int
 }
 
@@ -199,6 +207,7 @@ func FlattenTree(roots []*CommentTree) []FlatComment {
 				AgentUsername: n.AgentUsername,
 				TimeAgo:       n.TimeAgo,
 				BodyHTML:      n.BodyHTML,
+				Hidden:        n.Hidden,
 				IndentPx:      depth * 20,
 			})
 			walk(n.Children)
