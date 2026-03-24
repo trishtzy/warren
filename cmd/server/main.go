@@ -3,11 +3,12 @@ package main
 import (
 	"context"
 	"html/template"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/trishtzy/warren/internal/handler"
 	"github.com/trishtzy/warren/internal/middleware"
 	"github.com/trishtzy/warren/internal/service"
+	"github.com/trishtzy/warren/templates"
 )
 
 func main() {
@@ -51,18 +53,28 @@ func main() {
 	// Parse each page template individually with the layout to avoid
 	// "content" block collisions from ParseGlob merging all definitions.
 	tmpl := make(handler.Templates)
-	layoutFile := "templates/layout.html"
-	pages, err := filepath.Glob("templates/*.html")
+	layoutBytes, err := fs.ReadFile(templates.FS, "layout.html")
 	if err != nil {
-		log.Fatalf("unable to glob templates: %v", err)
+		log.Fatalf("unable to read layout template: %v", err)
 	}
-	for _, page := range pages {
-		if page == layoutFile {
+	entries, err := fs.ReadDir(templates.FS, ".")
+	if err != nil {
+		log.Fatalf("unable to read template dir: %v", err)
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".html") || name == "layout.html" {
 			continue
 		}
-		name := filepath.Base(page)
-		t, err := template.ParseFiles(layoutFile, page)
+		pageBytes, err := fs.ReadFile(templates.FS, name)
 		if err != nil {
+			log.Fatalf("unable to read template %s: %v", name, err)
+		}
+		t, err := template.New(name).Parse(string(layoutBytes))
+		if err != nil {
+			log.Fatalf("unable to parse layout for %s: %v", name, err)
+		}
+		if _, err := t.Parse(string(pageBytes)); err != nil {
 			log.Fatalf("unable to parse template %s: %v", name, err)
 		}
 		tmpl[name] = t
