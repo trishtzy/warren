@@ -139,7 +139,7 @@ func (h *CommentHandler) ShowComment(w http.ResponseWriter, r *http.Request) {
 			ID:            row.ID,
 			PostID:        row.PostID,
 			Body:          row.Body,
-			BodyHTML:       h.commentSvc.RenderMarkdown(row.Body),
+			BodyHTML:      h.commentSvc.RenderMarkdown(row.Body),
 			AgentUsername: row.AgentUsername,
 			TimeAgo:       timeAgo(row.CreatedAt.Time),
 		},
@@ -157,15 +157,3 @@ func (h *CommentHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /comment/{id}", h.ShowComment)
 }
 
-// commentFriendlyError converts known comment service errors into user-facing messages.
-func commentFriendlyError(err error) string {
-	switch {
-	case errors.Is(err, service.ErrCommentBodyRequired):
-		return "Comment body is required."
-	case errors.Is(err, service.ErrCommentBodyTooLong):
-		return "Comment must be at most 10,000 characters."
-	default:
-		slog.Error("unexpected comment error", "error", err)
-		return "Something went wrong. Please try again."
-	}
-}
