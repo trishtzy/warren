@@ -17,29 +17,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// stubQueries implements enough of *db.Queries for CommentHandler tests.
-// We only need GetPostByID and GetCommentByID.
-type stubQueries struct {
-	posts    map[int64]db.GetPostByIDRow
-	comments map[int64]db.GetCommentByIDRow
-}
-
-func (s *stubQueries) GetPostByID(_ context.Context, id int64) (db.GetPostByIDRow, error) {
-	p, ok := s.posts[id]
-	if !ok {
-		return db.GetPostByIDRow{}, pgx.ErrNoRows
-	}
-	return p, nil
-}
-
-func (s *stubQueries) GetCommentByID(_ context.Context, id int64) (db.GetCommentByIDRow, error) {
-	c, ok := s.comments[id]
-	if !ok {
-		return db.GetCommentByIDRow{}, pgx.ErrNoRows
-	}
-	return c, nil
-}
-
 // stubCommentQuerier implements service.CommentQuerier for handler tests.
 type stubCommentQuerier struct {
 	comments      map[int64]db.Comment

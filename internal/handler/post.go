@@ -367,4 +367,3 @@ func postFriendlyError(err error) string {
 		return "Something went wrong. Please try again."
 	}
 }
-
